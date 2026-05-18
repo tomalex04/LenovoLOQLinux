@@ -1,0 +1,415 @@
+import sys, os, gi, subprocess, time, math, json
+gi.require_version('Gtk', '4.0'); gi.require_version('Adw', '1')
+from gi.repository import Gtk, Adw, GLib, Gio, Gdk
+
+sys.path.insert(0, os.path.dirname(__file__) + "/../python/legion_linux")
+import legion_linux.legion as l
+
+CONFIG_DIR = os.path.expanduser("~/.config/legion_linux")
+PROFILES_FILE = os.path.join(CONFIG_DIR, "profiles.json")
+SYSFS_BASE = "/sys/bus/platform/devices/PNP0C09:00"
+
+def hw_write(cmd_str):
+    """Write to hardware sysfs nodes via pkexec for non-root users."""
+    print(f"HW_WRITE: {cmd_str}")
+    cmd = ['sh', '-c', cmd_str]
+    if os.getuid() != 0: cmd = ['pkexec'] + cmd
+    subprocess.Popen(cmd, stdout=None, stderr=None)
+
+
+class FanCurveWidget(Gtk.DrawingArea):
+    """Interactive fan curve editor.
+    Each point is [cpu_temp, gpu_temp, speed] matching the kernel's
+    fancurve sysfs format: 'cpu_max_temp:gpu_max_temp:speed1'.
+    Verified format from real hardware:
+      75:60:0 80:70:30 90:80:34 97:80:37 ...
+    """
+    def __init__(self):
+        super().__init__()
+        self.set_hexpand(True); self.set_vexpand(True); self.set_size_request(600, 400)
+        self.set_draw_func(self.on_draw)
+        # Default points from verified hardware balanced mode
+        self.points = [
+            [75, 60, 0], [80, 70, 30], [90, 80, 34], [97, 80, 37],
+            [97, 80, 37], [97, 80, 37], [97, 80, 37], [97, 80, 37],
+            [99, 94, 37], [100, 20, 37]
+        ]
+        self.drag_idx = -1
+        gesture = Gtk.GestureClick(); gesture.connect("pressed", self.on_pressed); self.add_controller(gesture)
+        drag = Gtk.GestureDrag(); drag.connect("drag-update", self.on_drag_update); drag.connect("drag-end", self.on_drag_end); self.add_controller(drag)
+
+    def on_draw(self, area, cr, width, height):
+        ml, mb, mt, mr = 80, 70, 20, 20
+        w, h = width - ml - mr, height - mt - mb
+        # Dark background matching Vantage
+        cr.set_source_rgb(0.12, 0.12, 0.12); cr.rectangle(ml, mt, w, h); cr.fill()
+        # Grid lines
+        cr.set_source_rgb(0.22, 0.22, 0.22); cr.set_line_width(1)
+        for i in range(11):
+            y = mt + h - (i * h / 10); cr.move_to(ml, y); cr.line_to(ml + w, y)
+            x = ml + (i * w / 10); cr.move_to(x, mt); cr.line_to(x, mt + h)
+        cr.stroke()
+        # Y-axis: "Fan Speed" label at bottom, then 20% 40% 60% 80% 100%
+        cr.set_source_rgb(0.6, 0.6, 0.6); cr.set_font_size(12)
+        cr.move_to(5, mt + h + 15); cr.show_text("Fan Speed")
+        for i in range(20, 110, 20):
+            cr.move_to(ml - 45, mt + h - (i * h / 100) + 5); cr.show_text(f"{i}%")
+        # X-axis: "100 °C" label at bottom-right (matching Vantage)
+        cr.move_to(ml + w - 40, mt + h + 50); cr.show_text("100 °C")
+        # Draw the curve line using p[2] = speed
+        cr.set_source_rgb(0.35, 0.35, 0.35); cr.set_line_width(3)
+        for i, p in enumerate(self.points):
+            x, y = ml + (i * w / 9), mt + h - (p[2] * h / 100)
+            if i == 0: cr.move_to(x, y)
+            else: cr.line_to(x, y)
+        cr.stroke()
+        # Draw filled area under curve
+        cr.set_source_rgba(0.35, 0.35, 0.35, 0.15)
+        for i, p in enumerate(self.points):
+            x, y = ml + (i * w / 9), mt + h - (p[2] * h / 100)
+            if i == 0: cr.move_to(x, y)
+            else: cr.line_to(x, y)
+        cr.line_to(ml + (9 * w / 9), mt + h); cr.line_to(ml, mt + h); cr.close_path(); cr.fill()
+        # Draw control point circles (cyan like Vantage)
+        for i, p in enumerate(self.points):
+            x, y = ml + (i * w / 9), mt + h - (p[2] * h / 100)
+            cr.arc(x, y, 7, 0, 2 * math.pi)
+            if i == self.drag_idx: cr.set_source_rgb(1, 0.2, 0.2)
+            else: cr.set_source_rgb(0.2, 0.7, 1)
+            cr.fill()
+        # Vertical dashed lines from each point down
+        cr.set_source_rgb(0.3, 0.3, 0.3); cr.set_line_width(1)
+        for i, p in enumerate(self.points):
+            x, y = ml + (i * w / 9), mt + h - (p[2] * h / 100)
+            cr.move_to(x, y + 7); cr.line_to(x, mt + h)
+        cr.stroke()
+
+    def on_pressed(self, g, n, x, y):
+        ml, mt = 80, 20
+        w, h = self.get_width() - ml - 20, self.get_height() - mt - 60
+        for i, p in enumerate(self.points):
+            px, py = ml + (i * w / 9), mt + h - (p[2] * h / 100)
+            if math.sqrt((x-px)**2 + (y-py)**2) < 25:
+                self.drag_idx = i; self.queue_draw(); return
+
+    def on_drag_update(self, g, dx, dy):
+        if self.drag_idx == -1: return
+        ml, mt = 80, 20
+        w, h = self.get_width() - ml - 20, self.get_height() - mt - 60
+        ok, sx, sy = g.get_start_point()
+        if not ok: return
+        ns = max(0, min(100, int((h - (sy + dy - mt)) * 100 / h)))
+        self.points[self.drag_idx][2] = ns
+        # Enforce monotonically non-decreasing speed curve
+        for j in range(self.drag_idx + 1, 10):
+            if self.points[j][2] < ns: self.points[j][2] = ns
+        for j in range(self.drag_idx - 1, -1, -1):
+            if self.points[j][2] > ns: self.points[j][2] = ns
+        self.queue_draw()
+
+    def on_drag_end(self, g, dx, dy): self.drag_idx = -1; self.queue_draw()
+
+
+class CustomSettingsWindow(Adw.Window):
+    """Custom mode settings window matching Lenovo Vantage layout.
+    All slider ranges and attribute names verified against real sysfs output.
+    """
+    def __init__(self, parent, model):
+        super().__init__(transient_for=parent, modal=True, title="Custom Mode Settings", default_width=800, default_height=800)
+        self.m = model; self.profiles = self.load_profiles(); self.current_profile_name = "Default"
+        box = Gtk.Box(orientation=1); self.set_content(box)
+        header = Adw.HeaderBar(); box.append(header)
+
+        read_hw = Gtk.Button(label="Read from HW"); read_hw.connect("clicked", lambda b: self.on_read_hw()); header.pack_start(read_hw)
+
+        # Preset bar
+        top_bar = Gtk.Box(orientation=0, spacing=10, margin_top=10, margin_bottom=10, margin_start=10, margin_end=10, halign=Gtk.Align.CENTER)
+        top_bar.append(Gtk.Label(label="Active preset:"))
+        self.preset_combo = Gtk.DropDown(model=Gtk.StringList.new(["max", "min"]))
+        top_bar.append(self.preset_combo)
+        edit_btn = Gtk.Button(icon_name="document-edit-symbolic", css_classes=["flat", "circular"]); top_bar.append(edit_btn)
+        del_btn = Gtk.Button(icon_name="user-trash-symbolic", css_classes=["flat", "circular"]); top_bar.append(del_btn)
+        add_btn = Gtk.Button(label="+ Add", css_classes=["suggested-action", "pill"]); top_bar.append(add_btn)
+        box.append(top_bar)
+
+        # Scrollable content
+        scroll = Gtk.ScrolledWindow(hexpand=True, vexpand=True); box.append(scroll)
+        page = Adw.PreferencesPage(); scroll.set_child(page)
+
+        # === CPU Section === (exact names & descriptions from Lenovo Vantage)
+        cpu_group = Adw.PreferencesGroup(title="CPU"); page.add(cpu_group)
+        self.pl1 = self.add_slider(cpu_group, "Long Term Power Limit", 50, 95, " W",
+            "The continuous power consumption that can be reached by the CPU.")
+        self.pl2 = self.add_slider(cpu_group, "Short Term Power Limit", 60, 167, " W",
+            "The peak power consumption that can be reached by the CPU within a short amount time.")
+        self.cross_load = self.add_slider(cpu_group, "Long Term Power Limit (Cross Loading)", 25, 55, " W",
+            "The maximum power consumption that can be reached by the CPU when both CPU and GPU are fully utilized.")
+        self.pl2_duration = self.add_combo(cpu_group, "Short Term Power Limit Duration",
+            ["20 s", "24 s", "28 s", "32 s", "40 s", "48 s", "56 s", "64 s", "80 s", "96 s", "112 s", "128 s", "160 s"],
+            "The amount of time the CPU is allowed to boost and use Short Term Power Limit for. When Tau expires, Long Term Power Limit is used.")
+        self.cpu_temp = self.add_slider(cpu_group, "CPU Temperature Limit", 85, 100, " °C",
+            "The maximum temperature that can be reached by the CPU before frequency and power is reduced.")
+
+        # === GPU Section === (exact names & descriptions from Lenovo Vantage)
+        gpu_group = Adw.PreferencesGroup(title="GPU"); page.add(gpu_group)
+        self.dyn_boost = self.add_combo(gpu_group, "Dynamic Boost",
+            ["5 W", "10 W", "15 W"],
+            "The additional maximum power that can be allocated to the GPU based on the power consumption of the CPU.")
+        self.ctgp = self.add_combo(gpu_group, "Configurable TGP",
+            ["60 W", "65 W", "70 W", "75 W", "80 W"],
+            "The additional amount of power that can be allocated to the GPU on top of base power consumption.")
+        self.gpu_temp = self.add_slider(gpu_group, "GPU Temperature Limit", 75, 87, " °C",
+            "The maximum temperature that can be reached by the GPU before frequency and power is reduced.")
+        self.total_ac = self.add_slider(gpu_group, "Total Processor Power Target In AC", 10, 70, " W",
+            "The point at which the CPU triggers dynamic power consumption adjustment for the GPU.")
+        self.gpu_cpu_boost = self.add_combo(gpu_group, "GPU to CPU Dynamic Boost",
+            ["0 W", "5 W", "10 W", "15 W"],
+            "This is the maximum additional power that can be allocated to the CPU from the GPU based on CPU usage. The higher the value, the better the performance of applications that use the CPU.")
+
+        # === Fan Section ===
+        fan_group = Adw.PreferencesGroup(title="Fans"); page.add(fan_group)
+        fan_curve_row = Adw.PreferencesGroup(title="Fan curve",
+            description="Fan speed is not strictly determined by one temperature sensor. It will raise or lower speed per the highest sensor between CPU, GPU and Heatsink temperature. Exact values will appear when you hover mouse over each step.")
+        page.add(fan_curve_row)
+        self.graph = FanCurveWidget(); fan_curve_row.add(self.graph)
+        fan_reset = Gtk.Button(label="↺ Default", halign=Gtk.Align.CENTER, margin_top=10, margin_bottom=10)
+        fan_reset.connect("clicked", lambda b: self.on_read_hw())
+        fan_curve_row.add(fan_reset)
+        max_fan_group = Adw.PreferencesGroup(); page.add(max_fan_group)
+        self.max_fan = Adw.SwitchRow(title="Maximum fan speed",
+            subtitle="WARNING!\nProlonged usage of this option will degrade fans decreasing their longevity.\nSeriously, be careful with this option!")
+        max_fan_group.add(self.max_fan)
+
+        # Bottom action bar
+        bottom_bar = Gtk.Box(orientation=0, spacing=10, margin_top=10, margin_bottom=10, margin_start=10, margin_end=10)
+        bottom_bar.append(Gtk.Label(label="Load:"))
+        self.load_combo = Gtk.DropDown(model=Gtk.StringList.new(["max", "min"]))
+        bottom_bar.append(self.load_combo)
+        spacer = Gtk.Box(hexpand=True); bottom_bar.append(spacer)
+        save_btn = Gtk.Button(label="Save"); save_btn.connect("clicked", lambda b: self.save_current(False)); bottom_bar.append(save_btn)
+        save_close_btn = Gtk.Button(label="Save & Close", css_classes=["suggested-action"]); save_close_btn.connect("clicked", lambda b: self.save_current(True)); bottom_bar.append(save_close_btn)
+        box.append(bottom_bar)
+
+        self.on_read_hw()
+
+    def add_slider(self, group, title, low, up, unit="", subtitle=""):
+        row = Adw.ActionRow(title=title)
+        if subtitle: row.set_subtitle(subtitle)
+        scale = Gtk.Scale(orientation=0, adjustment=Gtk.Adjustment(value=low, lower=low, upper=up, step_increment=1))
+        scale.set_hexpand(True); scale.set_draw_value(True); scale.set_value_pos(Gtk.PositionType.RIGHT); scale.set_size_request(250, -1)
+        if unit:
+            scale.connect("value-changed", lambda s: s.set_value_pos(Gtk.PositionType.RIGHT))
+            def format_value(s, val, u=unit): return f"{int(val)}{u}"
+            scale.connect("query-tooltip", lambda *a: False)
+            scale.set_format_value_func(format_value)
+        row.add_suffix(scale)
+        reset = Gtk.Button(icon_name="view-refresh-symbolic", css_classes=["flat", "circular"], valign=Gtk.Align.CENTER)
+        reset.connect("clicked", lambda b: scale.set_value(low))
+        row.add_suffix(reset)
+        group.add(row)
+        return scale
+
+    def add_combo(self, group, title, items, subtitle=""):
+        row = Adw.ComboRow(title=title, model=Gtk.StringList.new(items))
+        if subtitle: row.set_subtitle(subtitle)
+        reset = Gtk.Button(icon_name="view-refresh-symbolic", css_classes=["flat", "circular"], valign=Gtk.Align.CENTER)
+        reset.connect("clicked", lambda b: row.set_selected(0))
+        row.add_suffix(reset)
+        group.add(row)
+        return row
+
+    def load_profiles(self):
+        if not os.path.exists(CONFIG_DIR): os.makedirs(CONFIG_DIR)
+        if os.path.exists(PROFILES_FILE):
+            with open(PROFILES_FILE, "r") as f: return json.load(f)
+        # Default profile with verified hardware balanced-mode values
+        return {"Default": {
+            "pl1": 65, "pl2": 80, "cross_load": 55, "peak": 20,
+            "dyn_boost": 15, "ctgp": 80, "gpu_temp": 87,
+            "fan": [[75,60,0],[80,70,30],[90,80,34],[97,80,37],[97,80,37],[97,80,37],[97,80,37],[97,80,37],[99,94,37],[100,20,37]]
+        }}
+
+    def on_read_hw(self):
+        """Read all current values from sysfs. Each read is independent
+        so a single failure doesn't block the others."""
+        try: self.pl1.set_value(int(self.m.cpu_longterm_power_limit.get()))
+        except: pass
+        try: self.pl2.set_value(int(self.m.cpu_shortterm_power_limit.get()))
+        except: pass
+        try: self.cross_load.set_value(int(self.m.cpu_cross_loading_power_limit.get()))
+        except: pass
+        try: self.total_ac.set_value(int(self.m.cpu_peak_power_limit.get()))
+        except: pass
+        # Dynamic Boost dropdown: values are 5, 10, 15 → indices 0, 1, 2
+        try:
+            val = int(self.m.gpu_ppab_power_limit.get())
+            dyn_items = [5, 10, 15]
+            if val in dyn_items: self.dyn_boost.set_selected(dyn_items.index(val))
+        except: pass
+        # Configurable TGP dropdown: values are 60, 65, 70, 75, 80 → indices 0-4
+        try:
+            val = int(self.m.gpu_ctgp_power_limit.get())
+            ctgp_items = [60, 65, 70, 75, 80]
+            if val in ctgp_items: self.ctgp.set_selected(ctgp_items.index(val))
+        except: pass
+        try: self.gpu_temp.set_value(int(self.m.gpu_temperature_limit.get()))
+        except: pass
+        try: self.max_fan.set_active(self.m.maximum_fanspeed.get())
+        except: pass
+
+        # Read fan curve directly from sysfs
+        # Verified format: "75:60:0 80:70:30 90:80:34 ..." (cpu_temp:gpu_temp:speed)
+        try:
+            fancurve_path = os.path.join(SYSFS_BASE, "fancurve")
+            with open(fancurve_path, "r") as f:
+                content = f.read().strip()
+                if content:
+                    pts = []
+                    for token in content.split():
+                        parts = token.split(":")
+                        if len(parts) >= 3:
+                            pts.append([int(parts[0]), int(parts[1]), int(parts[2])])
+                    if len(pts) == 10:
+                        self.graph.points = pts
+                        self.graph.queue_draw()
+        except: pass
+
+    def save_current(self, close):
+        """Save settings to local profile and write to hardware via single pkexec."""
+        # Safety confirmation dialog
+        dialog = Adw.MessageDialog(
+            transient_for=self,
+            heading="Apply Custom Settings?",
+            body="This will write power limits, thermal limits, and fan curve values directly to hardware. Are you sure?"
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("apply", "Apply")
+        dialog.set_response_appearance("apply", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+        dialog.connect("response", lambda d, resp: self._do_save(close) if resp == "apply" else None)
+        dialog.present()
+
+    def _do_save(self, close):
+        """Actually perform the hardware write after user confirmation."""
+        p = {
+            "pl1": int(self.pl1.get_value()), "pl2": int(self.pl2.get_value()),
+            "cross_load": int(self.cross_load.get_value()), "peak": int(self.total_ac.get_value()),
+            "dyn_boost": [5,10,15][self.dyn_boost.get_selected()], "ctgp": [60,65,70,75,80][self.ctgp.get_selected()],
+            "gpu_temp": int(self.gpu_temp.get_value()), "fan": self.graph.points
+        }
+        self.profiles[self.current_profile_name] = p
+        with open(PROFILES_FILE, "w") as f: json.dump(self.profiles, f)
+
+        # Build a single compound command — one pkexec password prompt
+        cmds = []
+        # Map: (slider, model_attribute_name)
+        slider_map = [
+            (self.pl1, "cpu_longterm_power_limit"),
+            (self.pl2, "cpu_shortterm_power_limit"),
+            (self.cross_load, "cpu_cross_loading_power_limit"),
+            (self.total_ac, "cpu_peak_power_limit"),
+            (self.gpu_temp, "gpu_temperature_limit"),
+        ]
+        for slider, attr_name in slider_map:
+            feat = getattr(self.m, attr_name, None)
+            if feat and feat.exists():
+                cmds.append(f"echo {int(slider.get_value())} > {feat.filename}")
+
+        # Max fan speed
+        # Dynamic Boost dropdown → actual wattage value
+        dyn_val = [5, 10, 15][self.dyn_boost.get_selected()]
+        feat = getattr(self.m, "gpu_ppab_power_limit", None)
+        if feat and feat.exists():
+            cmds.append(f"echo {dyn_val} > {feat.filename}")
+        # Configurable TGP dropdown → actual wattage value
+        ctgp_val = [60, 65, 70, 75, 80][self.ctgp.get_selected()]
+        feat = getattr(self.m, "gpu_ctgp_power_limit", None)
+        if feat and feat.exists():
+            cmds.append(f"echo {ctgp_val} > {feat.filename}")
+
+        feat = getattr(self.m, "maximum_fanspeed", None)
+        if feat and feat.exists():
+            cmds.append(f"echo {1 if self.max_fan.get_active() else 0} > {feat.filename}")
+
+        # Fan curve — format matches kernel's fancurve_store: "cpu:gpu:speed cpu:gpu:speed ..."
+        fan_cmd = " ".join([f"{pt[0]}:{pt[1]}:{pt[2]}" for pt in self.graph.points])
+        fancurve_path = os.path.join(SYSFS_BASE, "fancurve")
+        cmds.append(f"echo '{fan_cmd}' > {fancurve_path}")
+
+        if cmds:
+            hw_write(" && ".join(cmds))
+
+        if close: self.close()
+
+
+class LegionApp(Adw.Application):
+    def __init__(self): super().__init__(application_id="com.github.legiontoolkit.gtk")
+    def do_activate(self):
+        self.m = l.LegionModelFacade(expect_hwmon=True); self.lock_time = 0
+        win = Adw.ApplicationWindow(application=self, title="Legion Toolkit", default_width=600)
+        box = Gtk.Box(orientation=1); win.set_content(box)
+        header = Adw.HeaderBar(); box.append(header)
+        stack = Adw.ViewStack(); header.set_title_widget(Adw.ViewSwitcher(stack=stack)); box.append(stack)
+        p1 = Gtk.Box(orientation=1, spacing=20); [getattr(p1,f"set_margin_{m}")(32) for m in ["top","bottom","start","end"]]
+        g1 = Adw.PreferencesGroup(title="Status")
+        self.cpu = Adw.ActionRow(title="CPU", subtitle="--"); g1.add(self.cpu)
+        self.gpu = Adw.ActionRow(title="GPU", subtitle="--"); g1.add(self.gpu)
+        self.mode_values = self.m.platform_profile.get_values()
+        display_names = []
+        for nv in self.mode_values:
+            name = nv.name[:-5] if nv.name.endswith(" Mode") else nv.name
+            display_names.append(name)
+        self.mode = Adw.ComboRow(title="Mode", model=Gtk.StringList.new(display_names))
+        # Settings icon — only visible when Custom mode is active
+        self.mode_btn = Gtk.Button(icon_name="emblem-system-symbolic"); self.mode_btn.set_valign(Gtk.Align.CENTER); self.mode_btn.connect("clicked", self.on_custom_settings)
+        self.mode.add_suffix(self.mode_btn); self.mode.connect("notify::selected", self.on_mode); g1.add(self.mode); p1.append(g1)
+        stack.add_titled_with_icon(p1, "dash", "Status", "computer-symbolic")
+        p2 = Gtk.Box(orientation=1, spacing=20); [getattr(p2,f"set_margin_{m}")(32) for m in ["top","bottom","start","end"]]
+        self.perc = Adw.StatusPage(title="--%", icon_name="battery-full-symbolic"); p2.append(self.perc)
+        g2 = Adw.PreferencesGroup(title="Battery Settings")
+        self.cons = Adw.SwitchRow(title="Conservation Mode", subtitle="Limit charge to 80%"); self.rapid = Adw.SwitchRow(title="Rapid Charge", subtitle="Charge faster")
+        self.cons.connect("notify::active", self.on_batt); self.rapid.connect("notify::active", self.on_batt)
+        g2.add(self.cons); g2.add(self.rapid); p2.append(g2); stack.add_titled_with_icon(p2, "batt", "Battery", "battery-full-symbolic")
+        self.sync_ui(); GLib.timeout_add(1000, self.update); GLib.timeout_add_seconds(3, self.lazy_refresh); win.present()
+
+    def lazy_refresh(self): self.sync_ui(); return True
+    def sync_ui(self):
+        if time.time() < self.lock_time: return
+        try:
+            curr = self.m.platform_profile.get()
+            display_curr = "balanced-performance" if curr == "custom" else curr
+            self.mode.handler_block_by_func(self.on_mode)
+            for i, nv in enumerate(self.mode_values):
+                if nv.value == display_curr: self.mode.set_selected(i); break
+            self.mode.handler_unblock_by_func(self.on_mode)
+            # Settings gear only for custom mode
+            self.mode_btn.set_visible(curr in ["255", "custom", "balanced-performance"])
+            self.perc.set_title(f"{int(self.m.battery_capacity_perc.get())}%")
+            self.cons.handler_block_by_func(self.on_batt); self.rapid.handler_block_by_func(self.on_batt)
+            self.cons.set_active(self.m.battery_conservation.get()); self.rapid.set_active(self.m.rapid_charging.get())
+            self.cons.handler_unblock_by_func(self.on_batt); self.rapid.handler_unblock_by_func(self.on_batt)
+        except: pass
+    def update(self):
+        try:
+            self.cpu.set_subtitle(f"{int(self.m.cpu_temp.get()/1000)}°C | {self.m.fan1_rpm.get()} RPM")
+            self.gpu.set_subtitle(f"{int(self.m.gpu_temp.get()/1000)}°C | {self.m.fan2_rpm.get()} RPM")
+        except: pass
+        return True
+    def on_mode(self, row, p):
+        self.lock_time = time.time() + 4.0; sel = row.get_selected()
+        mode_val = self.mode_values[sel].value
+        self.mode_btn.set_visible(mode_val in ["255", "custom", "balanced-performance"])
+        hw_write(f"echo {mode_val} > {self.m.platform_profile.filename}")
+    def on_batt(self, row, p):
+        self.lock_time = time.time() + 4.0; active = row.get_active()
+        if active:
+            if row == self.cons:
+                self.rapid.handler_block_by_func(self.on_batt); self.rapid.set_active(False); self.rapid.handler_unblock_by_func(self.on_batt)
+            else:
+                self.cons.handler_block_by_func(self.on_batt); self.cons.set_active(False); self.cons.handler_unblock_by_func(self.on_batt)
+        cons_v = 1 if self.cons.get_active() else 0; rapid_v = 1 if self.rapid.get_active() else 0
+        hw_write(f"echo 0 > {self.m.battery_conservation.filename} && echo 0 > {self.m.rapid_charging.filename} && echo {cons_v} > {self.m.battery_conservation.filename} && echo {rapid_v} > {self.m.rapid_charging.filename}")
+    def on_custom_settings(self, btn): CustomSettingsWindow(self.get_active_window(), self.m).present()
+
+if __name__ == "__main__": sys.exit(LegionApp().run(sys.argv))

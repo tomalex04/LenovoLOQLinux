@@ -1,0 +1,737 @@
+PS C:\WINDOWS\system32> $wmi_classes = Get-WmiObject -Namespace 'ROOT/WMI' -List -Class "*LENOVO*"
+>> foreach ($wmi_class in $wmi_classes){
+>>   Write-Host "########################################"
+>>   Write-Host "Name:" $wmi_class.Name
+>>   Write-Host "Class GUID:" $wmi_class.Qualifiers["guid"].Value
+>>   Write-Host "Description:" $wmi_class.Methods.Count
+>>   Write-Host "Methods:"
+>>   foreach ($method in $wmi_class.Methods){
+>>     Write-Host "Name:" $method.Name
+>>     Write-Host "WmiMethodId:" $method.Qualifiers["WmiMethodId"].Value
+>>     Write-Host "Description:" $method.Qualifiers["Description"].Value
+>>     Write-Host ""
+>>   }
+>>   Write-Host ""
+>> }
+>>
+########################################
+Name: LENOVO_UTILITY_EVENT
+Class GUID: {8fc0de0c-b4e4-43fd-b0f3-8871711c1294}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_LIGHTING_EVENT
+Class GUID: {1e3391a1-2c89-464d-95d9-3028b72e7a33}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_GAMEZONE_SMART_FAN_SETTING_EVENT
+Class GUID: {D320289E-8FEA-41E1-86F9-611D83151B5F}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_GAMEZONE_KEYLOCK_STATUS_EVENT
+Class GUID: {10AFC6D9-EA8B-4590-A2E7-1CD3C84BB4B1}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_GAMEZONE_SMART_FAN_MODE_EVENT
+Class GUID: {D320289E-8FEA-41E0-86F9-611D83151B5F}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_AI_SCENARIO_TYPE_EVENT
+Class GUID: {1cc13f2c-ea2c-4197-95a3-060e2285a645}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_REPORT_STATUS_TO_DISPATCHER_EVENT
+Class GUID: {058F5349-9FE1-4221-B1B3-984BACCE6DC0}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_SR_EVENT
+Class GUID: {95D1DF76-D6C0-4E16-9193-7B2A849F3DF2}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_GAMEZONE_TEMP_EVENT
+Class GUID: {BFD42481-AEE3-4501-A107-AFB68425C5F8}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_GAMEZONE_THERMAL_MODE_EVENT
+Class GUID: {D320289E-8FEA-41E0-86F9-911D83151B5F}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_AI_CHIP_EVENT
+Class GUID: {67a6c6cc-380a-4d25-aa35-a1397d1fbdfb}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_GAMEZONE_LIGHT_PROFILE_CHANGE_EVENT
+Class GUID: {D320289E-8FEA-41E0-86F9-811D83151B5F}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_DISPATCHER_EVENT
+Class GUID: {0F7B30EC-AC90-4B34-B62F-87F85115505D}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_GAMEZONE_OC_EVENT
+Class GUID: {D062906B-12D4-4510-999D-4831EE80E985}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_GAMEZONE_FAN_COOLING_EVENT
+Class GUID: {BC72A435-E8C1-4275-B3E2-D8B8074ABA59}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_GAMEZONE_POWER_CHARGE_MODE_EVENT
+Class GUID: {D320289E-8FEA-41E0-86F9-711D83151B5F}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_BTKBD_EVENT
+Class GUID: {806bd2a2-177b-481d-bfb5-3ba0bb4a2285}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_GAMEZONE_GPU_TEMP_EVENT
+Class GUID: {BFD42481-AEE3-4502-A107-AFB68425C5F8}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_AC_PD_EVENT
+Class GUID: {be1346e5-3a32-4a31-b8b0-2cd195e1f572}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_UTILITY_DATA
+Class GUID: {ce6c0974-0407-4f50-88ba-4fc3b6559ad8}
+Description: 3
+Methods:
+Name: GetIfSupportOrVersion
+WmiMethodId: 1
+Description: Utility 3.1 function is Support or the function Version
+
+Name: SetFeature
+WmiMethodId: 2
+Description: Utility 3.1 Set feature function
+
+Name: SetFeatureEx
+WmiMethodId: 3
+Description: Utility 3.2 Set feature function
+
+
+########################################
+Name: LENOVO_FAN_TABLE_DATA
+Class GUID: {87fb2a6d-d802-48e7-9208-4576c5f5c8d8}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_FAN_METHOD
+Class GUID: {92549549-4bde-4f06-ac04-ce8bf898dbaa}
+Description: 2
+Methods:
+Name: Fan_Get_Table
+WmiMethodId: 5
+Description: Get Fan Table
+
+Name: Fan_Set_Table
+WmiMethodId: 6
+Description: Set Fan Table
+
+
+########################################
+Name: LENOVO_GAMEZONE_DATA
+Class GUID: {887B54E3-DDDC-4B2C-8B88-68A26A8835D0}
+Description: 68
+Methods:
+Name: GetIRTemp
+WmiMethodId: 1
+Description: Get IR temp
+
+Name: GetThermalTableID
+WmiMethodId: 2
+Description: Get ThermalTable ID
+
+Name: SetThermalTableID
+WmiMethodId: 3
+Description: Set ThermalTable ID
+
+Name: IsSupportGpuOC
+WmiMethodId: 4
+Description: Is SupportGpu OverClock
+
+Name: GetGpuGpsState
+WmiMethodId: 5
+Description: Get GpuGpsState
+
+Name: SetGpuGpsState
+WmiMethodId: 6
+Description: Set GpuGpsState
+
+Name: GetFanCount
+WmiMethodId: 7
+Description: Get Fan Count
+
+Name: GetFan1Speed
+WmiMethodId: 8
+Description: Get Fan1 Speed
+
+Name: GetFan2Speed
+WmiMethodId: 9
+Description: Get Fan2 Speed
+
+Name: GetFanMaxSpeed
+WmiMethodId: 10
+Description: Get Fan Max Speed
+
+Name: GetVersion
+WmiMethodId: 11
+Description: Get AslCode Version
+
+Name: IsSupportFanCooling
+WmiMethodId: 12
+Description: Fan cooling capabilty
+
+Name: SetFanCooling
+WmiMethodId: 13
+Description: Set Fan cooling on/off
+
+Name: IsSupportCpuOC
+WmiMethodId: 14
+Description: cpu oc capability
+
+Name: IsBIOSSupportOC
+WmiMethodId: 15
+Description: bios has overclock capability
+
+Name: SetBIOSOC
+WmiMethodId: 16
+Description: enble or disable overclock in bios
+
+Name: GetTriggerTemperatureValue
+WmiMethodId: 17
+Description: Get temperature change trigger temp value
+
+Name: GetCPUTemp
+WmiMethodId: 18
+Description: Get CPU temperature
+
+Name: GetGPUTemp
+WmiMethodId: 19
+Description: Get GPU temperature
+
+Name: GetFanCoolingStatus
+WmiMethodId: 20
+Description: Get Fan cooling on/off status
+
+Name: IsSupportDisableWinKey
+WmiMethodId: 21
+Description: EC support disable windows key capability
+
+Name: SetWinKeyStatus
+WmiMethodId: 22
+Description: Set windows key disable/enable
+
+Name: GetWinKeyStatus
+WmiMethodId: 23
+Description: Get windows key disable/enable status
+
+Name: IsSupportDisableTP
+WmiMethodId: 24
+Description: EC support disable touchpad capability
+
+Name: SetTPStatus
+WmiMethodId: 25
+Description: Set touchpad disable/enable
+
+Name: GetTPStatus
+WmiMethodId: 26
+Description: Get touchpad disable/enable status
+
+Name: GetGPUPow
+WmiMethodId: 27
+Description: Get GPU normal mode max TDP(W)
+
+Name: GetGPUOCPow
+WmiMethodId: 28
+Description: Get GPU OC mode max TDP(W)
+
+Name: GetGPUOCType
+WmiMethodId: 29
+Description: Get GPU OC type
+
+Name: GetKeyboardfeaturelist
+WmiMethodId: 30
+Description: Get Keyboard feature list
+
+Name: GetMemoryOCInfo
+WmiMethodId: 31
+Description: Get Memory OC Information
+
+Name: IsSupportWaterCooling
+WmiMethodId: 32
+Description: Water Cooling feature capability
+
+Name: SetWaterCoolingStatus
+WmiMethodId: 33
+Description: Set Water Cooling status
+
+Name: GetWaterCoolingStatus
+WmiMethodId: 34
+Description: Get Water Cooling status
+
+Name: IsSupportLightingFeature
+WmiMethodId: 35
+Description: Lighting feature capability
+
+Name: SetKeyboardLight
+WmiMethodId: 36
+Description: Set keyboard light off or on to max
+
+Name: GetKeyboardLight
+WmiMethodId: 37
+Description: Get keyboard light on/off status
+
+Name: GetMacrokeyScancode
+WmiMethodId: 38
+Description: Get Macrokey scan code
+
+Name: GetMacrokeyCount
+WmiMethodId: 39
+Description: Get Macrokey count
+
+Name: IsSupportGSync
+WmiMethodId: 40
+Description: Support G-Sync feature
+
+Name: GetGSyncStatus
+WmiMethodId: 41
+Description: Get G-Sync Statust
+
+Name: SetGSyncStatus
+WmiMethodId: 42
+Description: Set G-Sync Statust
+
+Name: IsSupportSmartFan
+WmiMethodId: 43
+Description: Support Smart Fan feature
+
+Name: SetSmartFanMode
+WmiMethodId: 44
+Description: Set Smart Fan Mode
+
+Name: GetSmartFanMode
+WmiMethodId: 45
+Description: Get Smart Fan Mode
+
+Name: GetSmartFanSetting
+WmiMethodId: 46
+Description: Get Smart Fan Setting Mode
+
+Name: GetPowerChargeMode
+WmiMethodId: 47
+Description: Get Power Charge Mode
+
+Name: GetProductInfo
+WmiMethodId: 48
+Description: Get Gaming Product Info
+
+Name: IsSupportOD
+WmiMethodId: 49
+Description: Over Drive feature capability
+
+Name: GetODStatus
+WmiMethodId: 50
+Description: Get Over Drive status
+
+Name: SetODStatus
+WmiMethodId: 51
+Description: Set Over Drive status
+
+Name: SetLightControlOwner
+WmiMethodId: 52
+Description: Set Light Control Owner
+
+Name: SetDDSControlOwner
+WmiMethodId: 53
+Description: Set DDS Control Owner
+
+Name: IsRestoreOCValue
+WmiMethodId: 54
+Description: Get the flag of restore OC value
+
+Name: GetThermalMode
+WmiMethodId: 55
+Description: Get Real Thremal Mode
+
+Name: GetBIOSOCMode
+WmiMethodId: 56
+Description: Get the OC switch status in BIOS
+
+Name: SetIntelligentSubMode
+WmiMethodId: 57
+Description: Set the current mode in Intelligent Mode
+
+Name: GetIntelligentSubMode
+WmiMethodId: 58
+Description: Get the current mode in Intelligent Mode
+
+Name: GetHardwareInfoSupportVersion
+WmiMethodId: 59
+Description: Get hardware info support version
+
+Name: GetCpuFrequency
+WmiMethodId: 60
+Description: Get Cpu core 0 max frequency
+
+Name: GetLearningProfileCount
+WmiMethodId: 61
+Description: Get Total count of Learning Profile
+
+Name: IsACFitForOC
+WmiMethodId: 62
+Description: Check the Adapter type fit for OC
+
+Name: IsSupportIGPUMode
+WmiMethodId: 63
+Description: Is support IGPU mode
+
+Name: GetIGPUModeStatus
+WmiMethodId: 64
+Description: Get IGPU Mode Status
+
+Name: SetIGPUModeStatus
+WmiMethodId: 65
+Description: Set IGPU Mode
+
+Name: NotifyDGPUStatus
+WmiMethodId: 66
+Description: Notify DGPU Status
+
+Name: IsChangedYLog
+WmiMethodId: 67
+Description: Is changed Y log
+
+Name: GetDGPUHWId
+WmiMethodId: 68
+Description: Get DGPU Hardwawre ID
+
+
+########################################
+Name: LENOVO_CAPABILITY_DATA_02
+Class GUID: {bbf1f790-6c2f-422b-bc8c-4e7369c7f6ab}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_CPU_METHOD
+Class GUID: {14afd777-106f-4c9b-b334-d388dc7809be}
+Description: 1
+Methods:
+Name: CPU_Set_OC_Data
+WmiMethodId: 14
+Description: Set CPU Overclock Data
+
+
+########################################
+Name: LENOVO_FAN_MAX_SPEED_DATA
+Class GUID: {c3c7aeb8-4c06-4d40-8f29-212a6ccd74aa}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_CAPABILITY_DATA_00
+Class GUID: {362a3afe-3d96-4665-8530-96dad5bb300e}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_INTERNAL_PANEL_REFRESH_RATE_DATA
+Class GUID: {6260ecad-0d7d-4201-a8bd-2552e812501f}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_CAPABILITY_DATA_01
+Class GUID: {7a8f5407-cb67-4d6e-b547-39b3be018154}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_SR_DATA
+Class GUID: {77E614ED-F19E-46D6-A613-A8669FEE1FF0}
+Description: 6
+Methods:
+Name: GetDataValue
+WmiMethodId: 1
+Description: Super Resolution Type Data
+
+Name: StartECMonitor
+WmiMethodId: 2
+Description: Super Control sth. by Set-DataValue
+
+Name: StopECMonitor
+WmiMethodId: 3
+Description: Super Control sth. by Set-DataValue
+
+Name: GetCapability
+WmiMethodId: 4
+Description: Super Resolution Capability
+
+Name: Reserved1
+WmiMethodId: 5
+Description: Super Resolution Reserved
+
+Name: Reserved2
+WmiMethodId: 6
+Description: Super Resolution Reserved function
+
+
+########################################
+Name: LENOVO_DISCRETE_DATA
+Class GUID: {91433b17-b7b7-4640-bb40-34c67349fbec}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_GPU_OVERCLOCKING_DATA
+Class GUID: {8A8984E2-228F-685F-B496-DDA5F52CBE5B}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_OTHER_METHOD
+Class GUID: {dc2a8805-3a8c-41ba-a6f7-092e0089cd3b}
+Description: 4
+Methods:
+Name: GetFeatureValue
+WmiMethodId: 17
+Description: Get Feature Value
+
+Name: SetFeatureValue
+WmiMethodId: 18
+Description: Set Feature Value
+
+Name: GetDataByCommand
+WmiMethodId: 19
+Description: Get Data By Command
+
+Name: GetDataByPackage
+WmiMethodId: 99
+Description: Get Data By Package
+
+
+########################################
+Name: LENOVO_PANEL_METHOD
+Class GUID: {e5edffbf-e822-4bbe-8650-c07b8bae4c54}
+Description: 22
+Methods:
+Name: Panel_Get_Support_Status
+WmiMethodId: 1
+Description: Get Panel Support Functions
+
+Name: Panel_Get_Status
+WmiMethodId: 2
+Description: Get Panel Functions Status
+
+Name: Panel_Set_Status
+WmiMethodId: 3
+Description: Set Panel Functions Status
+
+Name: Panel_Get_Low_Latency_Mode
+WmiMethodId: 4
+Description: Get Panel Low Latency Mode
+
+Name: Panel_Set_Low_Latency_Mode
+WmiMethodId: 5
+Description: Set Panel Low Latency Mode
+
+Name: Panel_Get_PIP_Info
+WmiMethodId: 6
+Description: Get Panel PIP Info
+
+Name: Panel_Set_PIP_Info
+WmiMethodId: 7
+Description: Set Panel PIP Info
+
+Name: Panel_Get_Game_Aid_FPS_Display_Pos
+WmiMethodId: 8
+Description: Get Panel Game Aid FPS Display
+
+Name: Panel_Set_Game_Aid_FPS_Display_Pos
+WmiMethodId: 9
+Description: Set Panel Game Aid FPS Display
+
+Name: Panel_Get_Game_Aid_FPS
+WmiMethodId: 10
+Description: Set Panel Game Aid FPS Display
+
+Name: Panel_Get_Game_Aid_Sight_Mode
+WmiMethodId: 11
+Description: Get Panel Game Aid Sight Mode
+
+Name: Panel_Set_Game_Aid_Sight_Mode
+WmiMethodId: 12
+Description: Set Panel Game Aid Sight Mode
+
+Name: Panel_Get_Game_Aid_Timer_Info
+WmiMethodId: 13
+Description: Get Panel Game Aid Timer Info
+
+Name: Panel_Set_Game_Aid_Timer_Info
+WmiMethodId: 14
+Description: Set Panel Game Aid Timer Info
+
+Name: Panel_Get_Game_Aid_Countdown_Info
+WmiMethodId: 15
+Description: Get Panel Game Aid Countdown Timer Info
+
+Name: Panel_Set_Game_Aid_Countdown_Info
+WmiMethodId: 16
+Description: Set Panel Game Aid Countdown Timer Info
+
+Name: Panel_Get_Display_Mode
+WmiMethodId: 17
+Description: Get Panel Display Mode
+
+Name: Panel_Set_Display_Mode
+WmiMethodId: 18
+Description: Set Panel Display Mode
+
+Name: Panel_Get_Gamut_Switch
+WmiMethodId: 19
+Description: Get Panel Gamut Switch
+
+Name: Panel_Set_Gamut_Switch
+WmiMethodId: 20
+Description: Set Panel Gamut Switch
+
+Name: Panel_Get_MPRT
+WmiMethodId: 21
+Description: Get Panel MPRT info
+
+Name: Panel_Set_MPRT
+WmiMethodId: 22
+Description: Set Panel MPRT info
+
+
+########################################
+Name: LENOVO_CPU_OVERCLOCKING_DATA
+Class GUID: {4C90256D-44EA-D6A8-7650-63DF4FEB2CFF}
+Description: 0
+Methods:
+
+########################################
+Name: Lenovo_SystemElement
+Class GUID:
+Description: 0
+Methods:
+
+########################################
+Name: Lenovo_BatteryInformation
+Class GUID: C3A03776-51AC-49AA-AD0F-F2F7D62C3F3C
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_FEATURE_STATUS_DATA
+Class GUID: {e7f300fa-21cd-4003-adac-2696135982e6}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_MEMORY_OC_DATA
+Class GUID: {37d0014b-370c-47ef-bf03-588e8acb2fcd}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_INTELLIGENT_OP_LIST
+Class GUID: {93A57CD3-BBC6-46AB-951D-31F17CC968A0}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_GPU_METHOD
+Class GUID: {da7547f1-824d-405f-be79-d9903e29ced7}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_LIGHTING_DATA
+Class GUID: {4dd5bd84-15a9-47e2-ad65-cc61a5c62fd0}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_GAMEZONE_CPU_OC_DATA
+Class GUID: {B7F3CA0A-ACDC-42D2-9217-77C6C628FBD2}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_LIGHTING_METHOD
+Class GUID: {8c5b9127-ecd4-4657-980f-851019f99ca5}
+Description: 2
+Methods:
+Name: Get_Lighting_Current_Status
+WmiMethodId: 1
+Description: Get Current Lighting Status
+
+Name: Set_Lighting_Current_Status
+WmiMethodId: 2
+Description: Set Current Lighting Status
+
+
+########################################
+Name: LENOVO_GAMEZONE_GPU_OC_DATA
+Class GUID: {887B54E2-DDDC-4B2C-8B88-68A26A8835D0}
+Description: 0
+Methods:
+
+########################################
+Name: LENOVO_MEMORY_METHOD
+Class GUID: {03607fce-0d83-4612-8a6e-4a4ef0415ea9}
+Description: 3
+Methods:
+Name: MEM_Get_OC_Status
+WmiMethodId: 1
+Description: Get Memory OC Status
+
+Name: MEM_Set_OC_Status
+WmiMethodId: 2
+Description: Set Memory OC Status
+
+Name: MEM_Set_OC_Data
+WmiMethodId: 3
+Description: Set Memory OC Data
+
+
+PS C:\WINDOWS\system32>

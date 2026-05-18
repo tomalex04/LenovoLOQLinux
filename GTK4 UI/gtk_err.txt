@@ -1,0 +1,13 @@
+
+(legion_gtk.py:398842): Gdk-WARNING **: 23:12:57.318: Cannot get portal org.freedesktop.host.portal.Registry version: GDBus.Error:org.freedesktop.DBus.Error.InvalidArgs: No such interface “org.freedesktop.host.portal.Registry”
+dmesg: read kernel buffer failed: Operation not permitted
+Traceback (most recent call last):
+  File "/media/tom/Shared/work/LenovoLegionLinux/GTK4 UI/legion_gtk.py", line 365, in do_activate
+    self.m = l.LegionModelFacade(expect_hwmon=True); self.lock_time = 0
+             ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/media/tom/Shared/work/LenovoLegionLinux/GTK4 UI/../python/legion_linux/legion_linux/legion.py", line 1399, in __init__
+    self.fancurve_io = FanCurveIO(expect_hwmon=expect_hwmon)
+                       ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/media/tom/Shared/work/LenovoLegionLinux/GTK4 UI/../python/legion_linux/legion_linux/legion.py", line 758, in __init__
+    raise FileNotFoundError("hwmon dir not found")
+FileNotFoundError: hwmon dir not found

@@ -23,7 +23,11 @@ log = logging.getLogger(__name__)
 
 DEFAULT_ENCODING = "utf8"
 DEFAULT_CONFIG_DIR = "/etc/legion_linux"
-LEGION_SYS_BASEPATH = '/sys/module/legion_laptop/drivers/platform:legion/PNP0C09:00'
+kernel_version = tuple(map(int, os.uname().release.split('-')[0].split('.')))
+if kernel_version >= (7, 0, 0):
+    LEGION_SYS_BASEPATH = '/sys/module/legion_laptop/drivers/platform:legion/legion'
+else:
+    LEGION_SYS_BASEPATH = '/sys/module/legion_laptop/drivers/platform:legion/PNP0C09:00'
 IDEAPAD_SYS_BASEPATH = '/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00'
 LBLDVC_FILE = "/sys/firmware/efi/efivars/LBLDVC-871455d1-5576-4fb8-9865-af0824463c9f"
 LBLDESP_FILE = "/sys/firmware/efi/efivars/LBLDESP-871455d0-5576-4fb8-9865-af0824463b9e"
@@ -501,14 +505,15 @@ class MaximumFanSpeedFeature(BoolFileFeature):
 
 class PlatformProfileFeature(FileFeature):
     def __init__(self):
-        super().__init__("/sys/firmware/acpi/platform_profile")
+        super().__init__(
+            LEGION_SYS_BASEPATH + "/platform-profile/platform-profile-[0-9]/profile")
         self.choices = StrFileFeature(
-            "/sys/firmware/acpi/platform_profile_choices")
+            LEGION_SYS_BASEPATH + "/platform-profile/platform-profile-[0-9]/choices")
         self.all_values = [
             NamedValue("quiet", "Quiet Mode"),
             NamedValue("balanced", "Balanced Mode"),
+            NamedValue("balanced-performance", "Custom Mode"),
             NamedValue("performance", "Performance Mode"),
-            NamedValue("balanced-performance", "Custom Mode")
         ]
 
     def get_values(self) -> List[NamedValue]:
@@ -550,7 +555,10 @@ class BatteryIsCharging(BoolFileFeature):
 
 class BatteryCurrentCapacityPercentage(FloatFileFeature):
     def __init__(self):
-        super().__init__("/sys/class/power_supply/BAT0/capacity")
+        bat_path = "/sys/class/power_supply/BAT0/capacity"
+        if not os.path.exists(bat_path):
+            bat_path = "/sys/class/power_supply/BAT1/capacity"
+        super().__init__(bat_path)
 
     def set(self, _: str):
         raise NotImplementedError()
@@ -1389,6 +1397,42 @@ class SystemNotificationSender(NotifcationSender):
                 pass
 
 
+class CPUTemperature(IntFileFeature):
+    """CPU temperature in millicelsius from hwmon temp1_input"""
+    def __init__(self):
+        hwmon_base = os.path.join(LEGION_SYS_BASEPATH, "hwmon")
+        dirs = glob.glob(hwmon_base + "/hwmon*")
+        path = os.path.join(dirs[0], "temp1_input") if dirs else "/dev/null"
+        super().__init__(path, 0, 150000, 1000)
+
+
+class GPUTemperature(IntFileFeature):
+    """GPU temperature in millicelsius from hwmon temp2_input"""
+    def __init__(self):
+        hwmon_base = os.path.join(LEGION_SYS_BASEPATH, "hwmon")
+        dirs = glob.glob(hwmon_base + "/hwmon*")
+        path = os.path.join(dirs[0], "temp2_input") if dirs else "/dev/null"
+        super().__init__(path, 0, 150000, 1000)
+
+
+class Fan1RPM(IntFileFeature):
+    """Fan 1 RPM from hwmon fan1_input"""
+    def __init__(self):
+        hwmon_base = os.path.join(LEGION_SYS_BASEPATH, "hwmon")
+        dirs = glob.glob(hwmon_base + "/hwmon*")
+        path = os.path.join(dirs[0], "fan1_input") if dirs else "/dev/null"
+        super().__init__(path, 0, 10000, 100)
+
+
+class Fan2RPM(IntFileFeature):
+    """Fan 2 RPM from hwmon fan2_input"""
+    def __init__(self):
+        hwmon_base = os.path.join(LEGION_SYS_BASEPATH, "hwmon")
+        dirs = glob.glob(hwmon_base + "/hwmon*")
+        path = os.path.join(dirs[0], "fan2_input") if dirs else "/dev/null"
+        super().__init__(path, 0, 10000, 100)
+
+
 class LegionModelFacade:
     monitors: List[Monitor]
 
@@ -1435,6 +1479,10 @@ class LegionModelFacade:
         self.gpu_ctgp_power_limit = GPUCTGPPowerLimit()
         self.gpu_ppab_power_limit = GPUPPABPowerLimit()
         self.gpu_temperature_limit = GPUTemperatureLimit()
+        self.cpu_temp = CPUTemperature()
+        self.gpu_temp = GPUTemperature()
+        self.fan1_rpm = Fan1RPM()
+        self.fan2_rpm = Fan2RPM()
 
         # light
         self.ylogo_light = YLogoLight()

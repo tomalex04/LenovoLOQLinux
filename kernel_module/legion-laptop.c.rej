@@ -1,0 +1,58 @@
+--- legion-laptop.c
++++ legion-laptop.c
+@@ -2160,20 +2160,11 @@
+ static ssize_t cpu_apu_sppt_powerlimit_show(struct device *dev,
+                                            struct device_attribute *attr, char *buf)
+ {
+-       int val;
+-       if (WARN_ON(priv == NULL))
+-               return -EIO;
+-
+-       if (!test_bit(GAMEZONE_BIT_CPU_APU_SPPT_POWERLIMIT, priv->gamezone_attributes))
+-               return -EIO;
+-
+-       if (priv->is_v0)
+-               wmi_gamezone_method_get_value(
+-                       priv->gamezone_wmi,
+-                       GAMEZONE_METHOD_ID_CPU_APU_SPPT_POWERLIMIT, &val);
+-       else
+-               acpi_ec_read_ext(
+-                       priv->acpi_ec, priv->ec_register_offsets->cpu_apu_sppt_powerlimit, &val);
++       int val = -EIO;
++       if (WARN_ON(priv == NULL)) return -EIO;
++       
++       if (wmi_other_method_get_value(0x020b0000, &val) < 0) return -EIO;
++       
+        return sysfs_emit(buf, "%d\n", val);
+ }
+ 
+@@ -2181,25 +2172,13 @@
+                                             struct device_attribute *attr, const char *buf,
+                                             size_t count)
+ {
+-       int val;
+-       if (WARN_ON(priv == NULL))
+-               return -EIO;
+-
+-       if (!test_bit(GAMEZONE_BIT_CPU_APU_SPPT_POWERLIMIT, priv->gamezone_attributes))
+-               return -EIO;
+-
++       int val;
++       if (WARN_ON(priv == NULL)) return -EIO;
+        if (kstrtoint(buf, 10, &val))
+                return -EINVAL;
+ 
+-       if (priv->is_v0)
+-               wmi_gamezone_method_set_value(
+-                       priv->gamezone_wmi,
+-                       GAMEZONE_METHOD_ID_CPU_APU_SPPT_POWERLIMIT, &val);
+-       else
+-               acpi_ec_write_ext(
+-                       priv->acpi_ec, priv->ec_register_offsets->cpu_apu_sppt_powerlimit,
+-                       val);
+-
++       if (wmi_other_method_set_value(0x020b0000, val) < 0) return -EIO;
++       
+        return count;
+ }
+ static DEVICE_ATTR_RW(cpu_apu_sppt_powerlimit);

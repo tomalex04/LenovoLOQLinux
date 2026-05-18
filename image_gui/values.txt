@@ -1,0 +1,15 @@
+short term power limit duration    20 s  24 s  28 s 32 s 40 s 48 s 56 s 64 s 80 s 96 s 112 s 128 s 160 s
+dynamic boost 5w 10w 15w
+configurable tgp 60w 65w 70w 75w 80w
+cpu to gpu dynamic boost 0w 5w 10w 15w
+
+
+CPU Upper Temp. [°C] 75, 80, 90, 97, 97, 97, 97, 97, 99, 100
+
+GPU Upper Temp. [°C] 60, 70, 80, 80, 80, 80, 80, 80, 87,87
+
+pair these2 sets of value stogether for the x axis of the fan curve and make sure the points can be adjusted in the fan curve and only applied on save or save and exit
+
+
+
+this fancurve when clicked on "read from hw" and im scared to save and close as it can mess up my machine.

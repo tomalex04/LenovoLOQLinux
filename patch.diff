@@ -1,0 +1,145 @@
+--- kernel_module/legion-laptop.c
++++ kernel_module/legion-laptop.c
+@@ -194,6 +194,7 @@
+ 	ACCESS_METHOD_EC2 = 2,
+ 	ACCESS_METHOD_EC3 = 3,
+ 	ACCESS_METHOD_WMI = 4,
++	ACCESS_METHOD_EC4 = 6,
+ 	ACCESS_METHOD_WMI3 = 5,
+ 	ACCESS_METHOD_WMI2 = 8,
+ 	ACCESS_METHOD_ACPI = 9,
+@@ -397,6 +398,39 @@
+ 	.EXT_WHITE_KEYBOARD_BACKLIGHT = 0xC5a0 // not found yet
+ };
+ 
++static const struct ec_register_offsets ec_register_offsets_15iax9 = {
++	.ECHIPID1 = 0x2000,
++	.ECHIPID2 = 0x2001,
++	.ECHIPVER = 0x2002,
++	.ECDEBUG = 0x2003,
++	.EXT_FAN_CUR_POINT = 0xC5a0,
++	.EXT_FAN_POINTS_SIZE = 0xC5a0, 
++	.EXT_FAN1_BASE = 0xC509,
++	.EXT_FAN2_BASE = 0xC530, 
++	.EXT_FAN_ACC_BASE = 0xC5a0, 
++	.EXT_FAN_DEC_BASE = 0xC5a0, 
++	.EXT_CPU_TEMP = 0xC508,
++	.EXT_CPU_TEMP_HYST = 0xC5a0, 
++	.EXT_GPU_TEMP = 0xC50A,
++	.EXT_GPU_TEMP_HYST = 0xC5a0, 
++	.EXT_VRM_TEMP = 0xC5a0, 
++	.EXT_VRM_TEMP_HYST = 0xC5a0, 
++	.EXT_FAN1_RPM_LSB = 0xC5a0, 
++	.EXT_FAN1_RPM_MSB = 0xC5a0, 
++	.EXT_FAN2_RPM_LSB = 0xC5a0, 
++	.EXT_FAN2_RPM_MSB = 0xC5a0, 
++	.EXT_MINIFANCURVE_ON_COOL = 0xC5a0, 
++	.EXT_LOCKFANCONTROLLER = 0xC5a0, 
++	.EXT_CPU_TEMP_INPUT = 0xC5a0, 
++	.EXT_GPU_TEMP_INPUT = 0xC5a0, 
++	.EXT_IC_TEMP_INPUT = 0xC5a0, 
++	.EXT_POWERMODE = 0xC402,
++	.EXT_FAN1_TARGET_RPM = 0xC5a0, 
++	.EXT_FAN2_TARGET_RPM = 0xC5a0, 
++	.EXT_MAXIMUMFANSPEED = 0xC5a0, 
++	.EXT_WHITE_KEYBOARD_BACKLIGHT = 0xC5a0 
++};
++
+ static const struct model_config model_v0 = {
+ 	.registers = &ec_register_offsets_v0,
+ 	.check_embedded_controller_id = true,
+@@ -970,12 +1004,12 @@
+ 
+ // LOQ Model 2024
+ static const struct model_config model_necn = {
+-	.registers = &ec_register_offsets_loq_v0,
++	.registers = &ec_register_offsets_15iax9,
+ 	.check_embedded_controller_id = true,
+ 	.embedded_controller_id = 0x8227,
+ 	.memoryio_physical_ec_start = 0xC400,
+ 	.memoryio_size = 0x300,
+-	.has_minifancurve = false, // Disabled for safety
++	.has_minifancurve = true, 
+ 	.has_custom_powermode = true,
+ 	.access_method_powermode = ACCESS_METHOD_WMI,
+ 	.access_method_keyboard = ACCESS_METHOD_WMI2,
+@@ -983,7 +1017,7 @@
+ 	.access_method_temperature = ACCESS_METHOD_WMI3,
+-	.access_method_fancurve = ACCESS_METHOD_NO_ACCESS, // Explicitly disabled to prevent bricking via unverified EC writes
++	.access_method_fancurve = ACCESS_METHOD_EC4, 
+ 	.access_method_fanfullspeed = ACCESS_METHOD_WMI3,
+ 	.acpi_check_dev = false,
+ 	.ramio_physical_start = 0xFE0B0400,
+ 	.ramio_size = 0x600
+@@ -3292,6 +3326,79 @@
+ 	return 0;
+ }
+ 
++static int ec_write_fancurve_15iax9(struct ecram *ecram,
++				 const struct model_config *model,
++				 const struct fancurve *fancurve)
++{
++	size_t i;
++	size_t struct_offset = 3; 
++	size_t fan2_offset_diff = 0xC52F - 0xC508; 
++
++	for (i = 0; i < FANCURVESIZE_LOQ; ++i) {
++		const struct fancurve_point *point = &fancurve->points[i];
++
++		ecram_write(ecram, model->registers->EXT_FAN1_BASE + (i * struct_offset), point->speed1);
++		ecram_write(ecram, model->registers->EXT_FAN2_BASE + (i * struct_offset), point->speed2);
++
++		ecram_write(ecram, model->registers->EXT_CPU_TEMP + (i * struct_offset), point->cpu_max_temp_celsius);
++		ecram_write(ecram, model->registers->EXT_CPU_TEMP + fan2_offset_diff + (i * struct_offset), point->cpu_max_temp_celsius);
++
++		ecram_write(ecram, model->registers->EXT_GPU_TEMP + (i * struct_offset), point->gpu_max_temp_celsius);
++		ecram_write(ecram, model->registers->EXT_GPU_TEMP + fan2_offset_diff + (i * struct_offset), point->gpu_max_temp_celsius);
++	}
++
++	return 0;
++}
++
++static int ec_read_fancurve_15iax9(struct ecram *ecram,
++				const struct model_config *model,
++				struct fancurve *fancurve)
++{
++	size_t i;
++	size_t struct_offset = 3;
++
++	fancurve->size = FANCURVESIZE_LOQ;
++	fancurve->fan_speed_unit = FAN_SPEED_UNIT_PERCENT;
++
++	for (i = 0; i < FANCURVESIZE_LOQ; ++i) {
++		struct fancurve_point *point = &fancurve->points[i];
++
++		point->speed1 = ecram_read(ecram, model->registers->EXT_FAN1_BASE + (i * struct_offset));
++		point->speed2 = ecram_read(ecram, model->registers->EXT_FAN2_BASE + (i * struct_offset));
++		point->cpu_max_temp_celsius = ecram_read(ecram, model->registers->EXT_CPU_TEMP + (i * struct_offset));
++		point->gpu_max_temp_celsius = ecram_read(ecram, model->registers->EXT_GPU_TEMP + (i * struct_offset));
++	}
++
++	fancurve->current_point_i = 0;
++	return 0;
++}
++
+ static int ec_write_fancurve_loq(struct ecram *ecram,
+ 				 const struct model_config *model,
+ 				 const struct fancurve *fancurve)
+@@ -3349,6 +3456,8 @@
+ 						fancurve);
+ 	case ACCESS_METHOD_EC3:
+ 		return ec_read_fancurve_loq(&priv->ecram, priv->conf, fancurve);
++	case ACCESS_METHOD_EC4:
++		return ec_read_fancurve_15iax9(&priv->ecram, priv->conf, fancurve);
+ 	case ACCESS_METHOD_WMI3:
+ 		return wmi_read_fancurve_custom(priv->conf, fancurve);
+ 	default:
+@@ -3372,6 +3481,8 @@
+ 	case ACCESS_METHOD_EC3:
+ 		return ec_write_fancurve_loq(&priv->ecram, priv->conf,
+ 					     fancurve);
++	case ACCESS_METHOD_EC4:
++		return ec_write_fancurve_15iax9(&priv->ecram, priv->conf, fancurve);
+ 	case ACCESS_METHOD_WMI3:
+ 		return wmi_write_fancurve_custom(priv->conf, fancurve);
+ 	default:
