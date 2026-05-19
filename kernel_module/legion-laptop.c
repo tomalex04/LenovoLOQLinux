@@ -185,6 +185,17 @@ struct ec_register_offsets {
 	u16 EXT_IC_TEMP_INPUT;
 	u16 EXT_CPU_TEMP_INPUT;
 	u16 EXT_GPU_TEMP_INPUT;
+
+	// LOQ 15IAX9 power limit EC registers (discovered via /dev/mem)
+	u16 EXT_GPU_TEMPERATURE_LIMIT;
+	u16 EXT_CPU_CROSS_LOAD_POWER_LIMIT;
+	u16 EXT_CPU_LONG_TERM_POWER_LIMIT;
+	u16 EXT_CPU_SHORT_TERM_POWER_LIMIT;
+	u16 EXT_GPU_PPAB_POWER_LIMIT;
+	u16 EXT_CPU_PEAK_POWER_LIMIT;
+	u16 EXT_GPU_CTGP_POWER_LIMIT;
+	u16 EXT_CPU_PL1_TAU;
+	u16 EXT_CPU_TEMPERATURE_LIMIT;
 };
 
 enum access_method {
@@ -423,7 +434,18 @@ static const struct ec_register_offsets ec_register_offsets_loq_v0 = {
 	.EXT_FAN1_TARGET_RPM = 0xC5a0, // not found yet
 	.EXT_FAN2_TARGET_RPM = 0xC5a0, // not found yet
 	.EXT_MAXIMUMFANSPEED = 0xC5a0, // not found yet
-	.EXT_WHITE_KEYBOARD_BACKLIGHT = 0xC5a0 // not found yet
+	.EXT_WHITE_KEYBOARD_BACKLIGHT = 0xC5a0, // not found yet
+
+	// Power limit EC registers (discovered via /dev/mem EC dump)
+	.EXT_GPU_TEMPERATURE_LIMIT = 0xC4EA,
+	.EXT_CPU_CROSS_LOAD_POWER_LIMIT = 0xC4F0,
+	.EXT_CPU_LONG_TERM_POWER_LIMIT = 0xC4F2,
+	.EXT_CPU_SHORT_TERM_POWER_LIMIT = 0xC4F4,
+	.EXT_GPU_PPAB_POWER_LIMIT = 0xC4F6,
+	.EXT_CPU_PEAK_POWER_LIMIT = 0xC4FA,
+	.EXT_GPU_CTGP_POWER_LIMIT = 0xC4FC,
+	.EXT_CPU_PL1_TAU = 0xC4FE,
+	.EXT_CPU_TEMPERATURE_LIMIT = 0xC4FF,
 };
 
 static const struct ec_register_offsets ec_register_offsets_loq_v1 = {
@@ -4695,12 +4717,87 @@ static ssize_t cpu_oc_store(struct device *dev, struct device_attribute *attr,
 
 static DEVICE_ATTR_RW(cpu_oc);
 
+/*
+ * EC-based power limit read/write helpers using memory-mapped IO.
+ * Power limits are in extended EC space (0xC400+) accessible
+ * only via memory-mapped IO, not port IO.
+ */
+static int ec_read_power_limit_16(struct legion_private *priv,
+				  u16 ec_offset, int *value)
+{
+	u8 lo, hi;
+	if (!priv->conf->registers)
+		return -EOPNOTSUPP;
+	if (ec_offset == 0 || ec_offset == 0xC5a0)
+		return -EOPNOTSUPP;
+	if (!priv->ec_memoryio.virtual_start)
+		return -EOPNOTSUPP;
+	if (ecram_memoryio_read(&priv->ec_memoryio, ec_offset, &lo) ||
+	    ecram_memoryio_read(&priv->ec_memoryio, ec_offset + 1, &hi))
+		return -EIO;
+	*value = lo | (hi << 8);
+	return 0;
+}
+
+static int ec_write_power_limit_16(struct legion_private *priv,
+				   u16 ec_offset, int value)
+{
+	u8 lo = value & 0xFF, hi = (value >> 8) & 0xFF;
+	if (!priv->conf->registers)
+		return -EOPNOTSUPP;
+	if (ec_offset == 0 || ec_offset == 0xC5a0)
+		return -EOPNOTSUPP;
+	if (!priv->ec_memoryio.virtual_start)
+		return -EOPNOTSUPP;
+	ecram_memoryio_write(&priv->ec_memoryio, ec_offset, lo);
+	ecram_memoryio_write(&priv->ec_memoryio, ec_offset + 1, hi);
+	return 0;
+}
+
+#define DEFINE_EC_POWER_LIMIT_ATTR_RW(name, reg_field) \
+static ssize_t name##_show(struct device *dev, \
+			   struct device_attribute *attr, char *buf) \
+{ \
+	struct legion_private *priv = dev_get_drvdata(dev); \
+	int val; \
+	int ret = ec_read_power_limit_16(priv, \
+		priv->conf->registers->reg_field, &val); \
+	if (ret) \
+		return show_simple_wmi_attribute_from_buffer(dev, attr, buf, \
+			WMI_GUID_LENOVO_CPU_METHOD, 0, \
+			WMI_METHOD_ID_CPU_GET_##reg_field, 16, 0, 1); \
+	return sysfs_emit(buf, "%d\n", val); \
+} \
+static ssize_t name##_store(struct device *dev, \
+			    struct device_attribute *attr, \
+			    const char *buf, size_t count) \
+{ \
+	struct legion_private *priv = dev_get_drvdata(dev); \
+	int val; \
+	int ret; \
+	ret = kstrtoint(buf, 0, &val); \
+	if (ret) return ret; \
+	ret = ec_write_power_limit_16(priv, \
+		priv->conf->registers->reg_field, val); \
+	if (ret) \
+		return store_simple_wmi_attribute(dev, attr, buf, count, \
+			WMI_GUID_LENOVO_CPU_METHOD, 0, \
+			WMI_METHOD_ID_CPU_SET_##reg_field, false, 1); \
+	return count; \
+} \
+static DEVICE_ATTR_RW(name)
+
 static ssize_t cpu_shortterm_powerlimit_show(struct device *dev,
 					     struct device_attribute *attr,
 					     char *buf)
 {
-	return show_simple_wmi_attribute_from_buffer(
-		dev, attr, buf, WMI_GUID_LENOVO_CPU_METHOD, 0,
+	struct legion_private *priv = dev_get_drvdata(dev);
+	int val;
+	if (!ec_read_power_limit_16(priv,
+		priv->conf->registers->EXT_CPU_SHORT_TERM_POWER_LIMIT, &val))
+		return sysfs_emit(buf, "%d\n", val);
+	return show_simple_wmi_attribute_from_buffer(dev, attr, buf,
+		WMI_GUID_LENOVO_CPU_METHOD, 0,
 		WMI_METHOD_ID_CPU_GET_SHORTTERM_POWERLIMIT, 16, 0, 1);
 }
 
@@ -4708,8 +4805,15 @@ static ssize_t cpu_shortterm_powerlimit_store(struct device *dev,
 					      struct device_attribute *attr,
 					      const char *buf, size_t count)
 {
-	return store_simple_wmi_attribute(
-		dev, attr, buf, count, WMI_GUID_LENOVO_CPU_METHOD, 0,
+	struct legion_private *priv = dev_get_drvdata(dev);
+	int val, ret;
+	ret = kstrtoint(buf, 0, &val);
+	if (ret) return ret;
+	if (!ec_write_power_limit_16(priv,
+		priv->conf->registers->EXT_CPU_SHORT_TERM_POWER_LIMIT, val))
+		return count;
+	return store_simple_wmi_attribute(dev, attr, buf, count,
+		WMI_GUID_LENOVO_CPU_METHOD, 0,
 		WMI_METHOD_ID_CPU_SET_SHORTTERM_POWERLIMIT, false, 1);
 }
 
@@ -4719,8 +4823,13 @@ static ssize_t cpu_longterm_powerlimit_show(struct device *dev,
 					    struct device_attribute *attr,
 					    char *buf)
 {
-	return show_simple_wmi_attribute_from_buffer(
-		dev, attr, buf, WMI_GUID_LENOVO_CPU_METHOD, 0,
+	struct legion_private *priv = dev_get_drvdata(dev);
+	int val;
+	if (!ec_read_power_limit_16(priv,
+		priv->conf->registers->EXT_CPU_LONG_TERM_POWER_LIMIT, &val))
+		return sysfs_emit(buf, "%d\n", val);
+	return show_simple_wmi_attribute_from_buffer(dev, attr, buf,
+		WMI_GUID_LENOVO_CPU_METHOD, 0,
 		WMI_METHOD_ID_CPU_GET_LONGTERM_POWERLIMIT, 16, 0, 1);
 }
 
@@ -4728,8 +4837,15 @@ static ssize_t cpu_longterm_powerlimit_store(struct device *dev,
 					     struct device_attribute *attr,
 					     const char *buf, size_t count)
 {
-	return store_simple_wmi_attribute(
-		dev, attr, buf, count, WMI_GUID_LENOVO_CPU_METHOD, 0,
+	struct legion_private *priv = dev_get_drvdata(dev);
+	int val, ret;
+	ret = kstrtoint(buf, 0, &val);
+	if (ret) return ret;
+	if (!ec_write_power_limit_16(priv,
+		priv->conf->registers->EXT_CPU_LONG_TERM_POWER_LIMIT, val))
+		return count;
+	return store_simple_wmi_attribute(dev, attr, buf, count,
+		WMI_GUID_LENOVO_CPU_METHOD, 0,
 		WMI_METHOD_ID_CPU_SET_LONGTERM_POWERLIMIT, false, 1);
 }
 
@@ -4750,20 +4866,32 @@ static ssize_t cpu_peak_powerlimit_show(struct device *dev,
 					struct device_attribute *attr,
 					char *buf)
 {
-	return show_simple_wmi_attribute(dev, attr, buf,
-					 WMI_GUID_LENOVO_GPU_METHOD, 0,
-					 WMI_METHOD_ID_CPU_GET_PEAK_POWERLIMIT,
-					 false, 1);
+	struct legion_private *priv = dev_get_drvdata(dev);
+	int val;
+	int ret = ec_read_power_limit_16(priv,
+		priv->conf->registers->EXT_CPU_PEAK_POWER_LIMIT, &val);
+	if (ret)
+		return show_simple_wmi_attribute(dev, attr, buf,
+			WMI_GUID_LENOVO_GPU_METHOD, 0,
+			WMI_METHOD_ID_CPU_GET_PEAK_POWERLIMIT, false, 1);
+	return sysfs_emit(buf, "%d\n", val);
 }
 
 static ssize_t cpu_peak_powerlimit_store(struct device *dev,
 					 struct device_attribute *attr,
 					 const char *buf, size_t count)
 {
-	return store_simple_wmi_attribute(dev, attr, buf, count,
-					  WMI_GUID_LENOVO_GPU_METHOD, 0,
-					  WMI_METHOD_ID_CPU_SET_PEAK_POWERLIMIT,
-					  false, 1);
+	struct legion_private *priv = dev_get_drvdata(dev);
+	int val, ret;
+	ret = kstrtoint(buf, 0, &val);
+	if (ret) return ret;
+	ret = ec_write_power_limit_16(priv,
+		priv->conf->registers->EXT_CPU_PEAK_POWER_LIMIT, val);
+	if (ret)
+		return store_simple_wmi_attribute(dev, attr, buf, count,
+			WMI_GUID_LENOVO_GPU_METHOD, 0,
+			WMI_METHOD_ID_CPU_SET_PEAK_POWERLIMIT, false, 1);
+	return count;
 }
 
 static DEVICE_ATTR_RW(cpu_peak_powerlimit);
@@ -4792,18 +4920,32 @@ static ssize_t cpu_cross_loading_powerlimit_show(struct device *dev,
 						 struct device_attribute *attr,
 						 char *buf)
 {
-	return show_simple_wmi_attribute(
-		dev, attr, buf, WMI_GUID_LENOVO_GPU_METHOD, 0,
-		WMI_METHOD_ID_CPU_GET_CROSS_LOADING_POWERLIMIT, false, 1);
+	struct legion_private *priv = dev_get_drvdata(dev);
+	int val;
+	int ret = ec_read_power_limit_16(priv,
+		priv->conf->registers->EXT_CPU_CROSS_LOAD_POWER_LIMIT, &val);
+	if (ret)
+		return show_simple_wmi_attribute(dev, attr, buf,
+			WMI_GUID_LENOVO_GPU_METHOD, 0,
+			WMI_METHOD_ID_CPU_GET_CROSS_LOADING_POWERLIMIT, false, 1);
+	return sysfs_emit(buf, "%d\n", val);
 }
 
 static ssize_t cpu_cross_loading_powerlimit_store(struct device *dev,
 						  struct device_attribute *attr,
 						  const char *buf, size_t count)
 {
-	return store_simple_wmi_attribute(
-		dev, attr, buf, count, WMI_GUID_LENOVO_GPU_METHOD, 0,
-		WMI_METHOD_ID_CPU_SET_CROSS_LOADING_POWERLIMIT, false, 1);
+	struct legion_private *priv = dev_get_drvdata(dev);
+	int val, ret;
+	ret = kstrtoint(buf, 0, &val);
+	if (ret) return ret;
+	ret = ec_write_power_limit_16(priv,
+		priv->conf->registers->EXT_CPU_CROSS_LOAD_POWER_LIMIT, val);
+	if (ret)
+		return store_simple_wmi_attribute(dev, attr, buf, count,
+			WMI_GUID_LENOVO_GPU_METHOD, 0,
+			WMI_METHOD_ID_CPU_SET_CROSS_LOADING_POWERLIMIT, false, 1);
+	return count;
 }
 
 static DEVICE_ATTR_RW(cpu_cross_loading_powerlimit);
@@ -4832,19 +4974,32 @@ static ssize_t gpu_ppab_powerlimit_show(struct device *dev,
 					struct device_attribute *attr,
 					char *buf)
 {
-	return show_simple_wmi_attribute_from_buffer(
-		dev, attr, buf, WMI_GUID_LENOVO_GPU_METHOD, 0,
-		WMI_METHOD_ID_GPU_GET_PPAB_POWERLIMIT, 16, 0, 1);
+	struct legion_private *priv = dev_get_drvdata(dev);
+	int val;
+	int ret = ec_read_power_limit_16(priv,
+		priv->conf->registers->EXT_GPU_PPAB_POWER_LIMIT, &val);
+	if (ret)
+		return show_simple_wmi_attribute_from_buffer(dev, attr, buf,
+			WMI_GUID_LENOVO_GPU_METHOD, 0,
+			WMI_METHOD_ID_GPU_GET_PPAB_POWERLIMIT, 16, 0, 1);
+	return sysfs_emit(buf, "%d\n", val);
 }
 
 static ssize_t gpu_ppab_powerlimit_store(struct device *dev,
 					 struct device_attribute *attr,
 					 const char *buf, size_t count)
 {
-	return store_simple_wmi_attribute(dev, attr, buf, count,
-					  WMI_GUID_LENOVO_GPU_METHOD, 0,
-					  WMI_METHOD_ID_GPU_SET_PPAB_POWERLIMIT,
-					  false, 1);
+	struct legion_private *priv = dev_get_drvdata(dev);
+	int val, ret;
+	ret = kstrtoint(buf, 0, &val);
+	if (ret) return ret;
+	ret = ec_write_power_limit_16(priv,
+		priv->conf->registers->EXT_GPU_PPAB_POWER_LIMIT, val);
+	if (ret)
+		return store_simple_wmi_attribute(dev, attr, buf, count,
+			WMI_GUID_LENOVO_GPU_METHOD, 0,
+			WMI_METHOD_ID_GPU_SET_PPAB_POWERLIMIT, false, 1);
+	return count;
 }
 
 static DEVICE_ATTR_RW(gpu_ppab_powerlimit);
@@ -4853,19 +5008,32 @@ static ssize_t gpu_ctgp_powerlimit_show(struct device *dev,
 					struct device_attribute *attr,
 					char *buf)
 {
-	return show_simple_wmi_attribute_from_buffer(
-		dev, attr, buf, WMI_GUID_LENOVO_GPU_METHOD, 0,
-		WMI_METHOD_ID_GPU_GET_CTGP_POWERLIMIT, 16, 0, 1);
+	struct legion_private *priv = dev_get_drvdata(dev);
+	int val;
+	int ret = ec_read_power_limit_16(priv,
+		priv->conf->registers->EXT_GPU_CTGP_POWER_LIMIT, &val);
+	if (ret)
+		return show_simple_wmi_attribute_from_buffer(dev, attr, buf,
+			WMI_GUID_LENOVO_GPU_METHOD, 0,
+			WMI_METHOD_ID_GPU_GET_CTGP_POWERLIMIT, 16, 0, 1);
+	return sysfs_emit(buf, "%d\n", val);
 }
 
 static ssize_t gpu_ctgp_powerlimit_store(struct device *dev,
 					 struct device_attribute *attr,
 					 const char *buf, size_t count)
 {
-	return store_simple_wmi_attribute(dev, attr, buf, count,
-					  WMI_GUID_LENOVO_GPU_METHOD, 0,
-					  WMI_METHOD_ID_GPU_SET_CTGP_POWERLIMIT,
-					  false, 1);
+	struct legion_private *priv = dev_get_drvdata(dev);
+	int val, ret;
+	ret = kstrtoint(buf, 0, &val);
+	if (ret) return ret;
+	ret = ec_write_power_limit_16(priv,
+		priv->conf->registers->EXT_GPU_CTGP_POWER_LIMIT, val);
+	if (ret)
+		return store_simple_wmi_attribute(dev, attr, buf, count,
+			WMI_GUID_LENOVO_GPU_METHOD, 0,
+			WMI_METHOD_ID_GPU_SET_CTGP_POWERLIMIT, false, 1);
+	return count;
 }
 
 static DEVICE_ATTR_RW(gpu_ctgp_powerlimit);
@@ -4896,21 +5064,94 @@ static ssize_t gpu_temperature_limit_show(struct device *dev,
 					  struct device_attribute *attr,
 					  char *buf)
 {
-	return show_simple_wmi_attribute(
-		dev, attr, buf, WMI_GUID_LENOVO_GPU_METHOD, 0,
-		WMI_METHOD_ID_GPU_GET_TEMPERATURE_LIMIT, false, 1);
+	struct legion_private *priv = dev_get_drvdata(dev);
+	int val;
+	int ret = ec_read_power_limit_16(priv,
+		priv->conf->registers->EXT_GPU_TEMPERATURE_LIMIT, &val);
+	if (ret)
+		return show_simple_wmi_attribute(dev, attr, buf,
+			WMI_GUID_LENOVO_GPU_METHOD, 0,
+			WMI_METHOD_ID_GPU_GET_TEMPERATURE_LIMIT, false, 1);
+	return sysfs_emit(buf, "%d\n", val);
 }
 
 static ssize_t gpu_temperature_limit_store(struct device *dev,
 					   struct device_attribute *attr,
 					   const char *buf, size_t count)
 {
-	return store_simple_wmi_attribute(
-		dev, attr, buf, count, WMI_GUID_LENOVO_GPU_METHOD, 0,
-		WMI_METHOD_ID_GPU_SET_TEMPERATURE_LIMIT, false, 1);
+	struct legion_private *priv = dev_get_drvdata(dev);
+	int val, ret;
+	ret = kstrtoint(buf, 0, &val);
+	if (ret) return ret;
+	ret = ec_write_power_limit_16(priv,
+		priv->conf->registers->EXT_GPU_TEMPERATURE_LIMIT, val);
+	if (ret)
+		return store_simple_wmi_attribute(dev, attr, buf, count,
+			WMI_GUID_LENOVO_GPU_METHOD, 0,
+			WMI_METHOD_ID_GPU_SET_TEMPERATURE_LIMIT, false, 1);
+	return count;
 }
 
 static DEVICE_ATTR_RW(gpu_temperature_limit);
+
+static ssize_t cpu_temperature_limit_show(struct device *dev,
+					  struct device_attribute *attr,
+					  char *buf)
+{
+	struct legion_private *priv = dev_get_drvdata(dev);
+	u16 off = priv->conf->registers->EXT_CPU_TEMPERATURE_LIMIT;
+	u8 val;
+	if (off && off != 0xC5a0 && priv->ec_memoryio.virtual_start &&
+	    !ecram_memoryio_read(&priv->ec_memoryio, off, &val))
+		return sysfs_emit(buf, "%d\n", val);
+	return -EOPNOTSUPP;
+}
+
+static ssize_t cpu_temperature_limit_store(struct device *dev,
+					   struct device_attribute *attr,
+					   const char *buf, size_t count)
+{
+	struct legion_private *priv = dev_get_drvdata(dev);
+	u16 off = priv->conf->registers->EXT_CPU_TEMPERATURE_LIMIT;
+	int val, ret;
+	ret = kstrtoint(buf, 0, &val);
+	if (ret) return ret;
+	if (off && off != 0xC5a0 && priv->ec_memoryio.virtual_start &&
+	    !ecram_memoryio_write(&priv->ec_memoryio, off, val & 0xFF))
+		return count;
+	return -EOPNOTSUPP;
+}
+
+static DEVICE_ATTR_RW(cpu_temperature_limit);
+
+static ssize_t cpu_pl1_tau_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct legion_private *priv = dev_get_drvdata(dev);
+	u16 off = priv->conf->registers->EXT_CPU_PL1_TAU;
+	u8 val;
+	if (off && off != 0xC5a0 && priv->ec_memoryio.virtual_start &&
+	    !ecram_memoryio_read(&priv->ec_memoryio, off, &val))
+		return sysfs_emit(buf, "%d\n", val);
+	return -EOPNOTSUPP;
+}
+
+static ssize_t cpu_pl1_tau_store(struct device *dev,
+				 struct device_attribute *attr,
+				 const char *buf, size_t count)
+{
+	struct legion_private *priv = dev_get_drvdata(dev);
+	u16 off = priv->conf->registers->EXT_CPU_PL1_TAU;
+	int val, ret;
+	ret = kstrtoint(buf, 0, &val);
+	if (ret) return ret;
+	if (off && off != 0xC5a0 && priv->ec_memoryio.virtual_start &&
+	    !ecram_memoryio_write(&priv->ec_memoryio, off, val & 0xFF))
+		return count;
+	return -EOPNOTSUPP;
+}
+
+static DEVICE_ATTR_RW(cpu_pl1_tau);
 
 // TOOD: probably remove again because provided by other means; only useful for overclocking
 static ssize_t gpu_boost_clock_show(struct device *dev,
@@ -5053,6 +5294,8 @@ static struct attribute *legion_sysfs_attributes[] = {
 	&dev_attr_cpu_default_powerlimit.attr,
 	&dev_attr_cpu_peak_powerlimit.attr,
 	&dev_attr_cpu_cross_loading_powerlimit.attr,
+	&dev_attr_cpu_temperature_limit.attr,
+	&dev_attr_cpu_pl1_tau.attr,
 	&dev_attr_gpu_oc.attr,
 	&dev_attr_gpu_ppab_powerlimit.attr,
 	&dev_attr_gpu_ctgp_powerlimit.attr,
@@ -6551,10 +6794,10 @@ static int legion_add(struct platform_device *pdev)
 #else
 	err = acpi_init(priv, NULL);
 #endif
-	// TODO: remove; only used for reverse engineering
-	pr_info("Creating RAM access to embedded controller\n");
+	// Initialize memory-mapped EC access for power limits
 	err = ecram_memoryio_init(&priv->ec_memoryio,
-				  priv->conf->ramio_physical_start, 0,
+				  priv->conf->ramio_physical_start,
+				  priv->conf->memoryio_physical_ec_start,
 				  priv->conf->ramio_size);
 	if (err) {
 		dev_info(
@@ -6572,7 +6815,6 @@ static int legion_add(struct platform_device *pdev)
 			 err);
 		goto err_ecram_init;
 	}
-
 	ec_read_id = read_ec_id(&priv->ecram, priv->conf);
 	dev_info(&pdev->dev, "Read embedded controller ID 0x%x\n", ec_read_id);
 	skip_ec_id_check = force || (!priv->conf->check_embedded_controller_id);

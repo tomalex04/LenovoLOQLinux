@@ -510,11 +510,16 @@ class PlatformProfileFeature(FileFeature):
         self.choices = StrFileFeature(
             LEGION_SYS_BASEPATH + "/platform-profile/platform-profile-[0-9]/choices")
         self.all_values = [
-            NamedValue("quiet", "Quiet Mode"),
+            NamedValue("low-power", "Quiet Mode"),
             NamedValue("balanced", "Balanced Mode"),
             NamedValue("balanced-performance", "Custom Mode"),
             NamedValue("performance", "Performance Mode"),
         ]
+        # Alias map: choices file may use alternative names for same mode
+        # e.g. "custom" is an alias for "balanced-performance"
+        self.value_aliases = {
+            "custom": "balanced-performance",
+        }
 
     def get_values(self) -> List[NamedValue]:
         try:
@@ -523,7 +528,14 @@ class PlatformProfileFeature(FileFeature):
             print(error)
             available_choices_str = ""
         available_choices = available_choices_str.split(" ")
-        return [p for p in self.all_values if p.value in available_choices]
+        result = [p for p in self.all_values if p.value in available_choices]
+        # Also include entries whose alias appears in choices
+        for alias, real in self.value_aliases.items():
+            if alias in available_choices:
+                for p in self.all_values:
+                    if p.value == real and p not in result:
+                        result.append(p)
+        return result
 
     def set(self, value: str):
         self._write_file(self.filename, value)
@@ -1415,6 +1427,20 @@ class GPUTemperature(IntFileFeature):
         super().__init__(path, 0, 150000, 1000)
 
 
+class CPUTemperatureLimit(IntFileFeature):
+    """CPU Temperature Limit - EC register at 0xC4FF"""
+    def __init__(self):
+        super().__init__(os.path.join(LEGION_SYS_BASEPATH,
+                                      "cpu_temperature_limit"), 50, 110, 1)
+
+
+class CPUPL1Tau(IntFileFeature):
+    """CPU PL1 Tau (Short Term Power Limit Duration) - EC register at 0xC4FE"""
+    def __init__(self):
+        super().__init__(os.path.join(LEGION_SYS_BASEPATH,
+                                      "cpu_pl1_tau"), 0, 255, 1)
+
+
 class Fan1RPM(IntFileFeature):
     """Fan 1 RPM from hwmon fan1_input"""
     def __init__(self):
@@ -1479,6 +1505,8 @@ class LegionModelFacade:
         self.gpu_ctgp_power_limit = GPUCTGPPowerLimit()
         self.gpu_ppab_power_limit = GPUPPABPowerLimit()
         self.gpu_temperature_limit = GPUTemperatureLimit()
+        self.cpu_temperature_limit = CPUTemperatureLimit()
+        self.cpu_pl1_tau = CPUPL1Tau()
         self.cpu_temp = CPUTemperature()
         self.gpu_temp = GPUTemperature()
         self.fan1_rpm = Fan1RPM()

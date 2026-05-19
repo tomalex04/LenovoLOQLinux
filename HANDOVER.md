@@ -194,7 +194,6 @@ The GUI in `GTK4 UI/legion_gtk.py` has:
   - Configurable TGP — **dropdown** (60W, 65W, 70W, 75W, 80W)
   - GPU Temperature Limit — **slider** 75-87 °C
   - Total Processor Power Target In AC — **slider** 10-70 W
-  - GPU to CPU Dynamic Boost — **dropdown** (0W, 5W, 10W, 15W)
 - **Fan section:**
   - Interactive fan curve graph (Cairo-drawn, drag points, monotonically enforced)
   - "↺ Default" reset button
@@ -264,11 +263,7 @@ This aliases `custom` → `balanced-performance` (the closest match).
 
 **Status:** The dropdown UI exists (20s-160s) but `save_current()` does NOT write this value anywhere. The EC register for Tau/PL1 duration has not been discovered for this model.
 
-### 5.5 "GPU to CPU Dynamic Boost" Dropdown — Not Yet Wired to Hardware
-
-**Status:** The dropdown UI exists (0W, 5W, 10W, 15W) but `save_current()` does NOT write this value. The EC register for this feature has not been found.
-
-### 5.6 "Total Processor Power Target In AC" — Currently Writes to `cpu_peak_powerlimit`
+### 5.5 "Total Processor Power Target In AC" — Currently Writes to `cpu_peak_powerlimit`
 
 **Status:** The slider UI writes to `cpu_peak_powerlimit`. This may not be the correct register. The Vantage description says "The point at which the CPU triggers dynamic power consumption adjustment for the GPU", which could be a different EC offset.
 
@@ -392,9 +387,8 @@ pip install pyyaml pillow
 
 ### 8.1 HIGH PRIORITY: Find EC Registers for Tau Duration & GPU→CPU Boost
 
-The GUI has dropdowns for:
+The GUI has a dropdown for:
 - "Short Term Power Limit Duration" (20s-160s) — NOT yet writing to hardware
-- "GPU to CPU Dynamic Boost" (0-15W) — NOT yet writing to hardware
 
 **Method** (safe, read-only):
 1. Run `sudo python3 -c "

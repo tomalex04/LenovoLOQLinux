@@ -23,7 +23,6 @@ This project brings hardware-level tuning and custom power/thermal management sp
   - Configurable TGP (60W - 80W)
   - GPU Temperature Limit
   - Total Processor Power Target in AC
-  - GPU to CPU Dynamic Boost
 - **Fan Control**:
   - Read and write a full 10-point custom fan curve based on hardware temperatures.
   - Maximum Fan Speed toggle (Extreme cooling/Dust cleaning).

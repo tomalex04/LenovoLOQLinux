@@ -1,6 +1,9 @@
-import sys, os, gi, subprocess, time, math, json
+import sys, os, gi, subprocess, time, math, json, logging
 gi.require_version('Gtk', '4.0'); gi.require_version('Adw', '1')
 from gi.repository import Gtk, Adw, GLib, Gio, Gdk
+
+# Suppress legion model's noisy WMI error logs (EINVAL from unsupported WMI methods)
+logging.getLogger('legion').setLevel(logging.WARNING)
 
 sys.path.insert(0, os.path.dirname(__file__) + "/../python/legion_linux")
 import legion_linux.legion as l
@@ -162,9 +165,7 @@ class CustomSettingsWindow(Adw.Window):
             "The maximum temperature that can be reached by the GPU before frequency and power is reduced.")
         self.total_ac = self.add_slider(gpu_group, "Total Processor Power Target In AC", 10, 70, " W",
             "The point at which the CPU triggers dynamic power consumption adjustment for the GPU.")
-        self.gpu_cpu_boost = self.add_combo(gpu_group, "GPU to CPU Dynamic Boost",
-            ["0 W", "5 W", "10 W", "15 W"],
-            "This is the maximum additional power that can be allocated to the CPU from the GPU based on CPU usage. The higher the value, the better the performance of applications that use the CPU.")
+        # GPU to CPU Dynamic Boost removed — no WMI/EC support on LOQ 15IAX9
 
         # === Fan Section ===
         fan_group = Adw.PreferencesGroup(title="Fans"); page.add(fan_group)
@@ -230,8 +231,8 @@ class CustomSettingsWindow(Adw.Window):
         }}
 
     def on_read_hw(self):
-        """Read all current values from sysfs. Each read is independent
-        so a single failure doesn't block the others."""
+        """Read all current values from sysfs via EC memory-mapped IO.
+        Each read is independent so a single failure doesn't block others."""
         try: self.pl1.set_value(int(self.m.cpu_longterm_power_limit.get()))
         except: pass
         try: self.pl2.set_value(int(self.m.cpu_shortterm_power_limit.get()))
@@ -242,10 +243,12 @@ class CustomSettingsWindow(Adw.Window):
         except: pass
         try: self.total_ac.set_value(int(self.m.cpu_peak_power_limit.get()))
         except: pass
+        # PL1 Tau → set dropdown if value matches known options
+        tau_vals = [20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160]
         try:
-            tau_vals = [20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160]
             tau_raw = int(self.m.cpu_pl1_tau.get())
-            if tau_raw in tau_vals: self.pl2_duration.set_selected(tau_vals.index(tau_raw))
+            if tau_raw in tau_vals:
+                self.pl2_duration.set_selected(tau_vals.index(tau_raw))
         except: pass
         # Dynamic Boost dropdown: values are 5, 10, 15 → indices 0, 1, 2
         try:
@@ -263,12 +266,10 @@ class CustomSettingsWindow(Adw.Window):
         except: pass
         try: self.max_fan.set_active(self.m.maximum_fanspeed.get())
         except: pass
-
-        # Read fan curve directly from sysfs
-        # Verified format: "75:60:0 80:70:30 90:80:34 ..." (cpu_temp:gpu_temp:speed)
+        # Read fan curve
         try:
-            fancurve_path = os.path.join(SYSFS_BASE, "fancurve")
-            with open(fancurve_path, "r") as f:
+            path = os.path.join(SYSFS_BASE, "fancurve")
+            with open(path, "r") as f:
                 content = f.read().strip()
                 if content:
                     pts = []
@@ -313,45 +314,49 @@ class CustomSettingsWindow(Adw.Window):
 
         # Build a single compound command — one pkexec password prompt
         cmds = []
-        # Map: (slider, model_attribute_name)
-        slider_map = [
+        # Map each slider/dropdown to its model attribute name
+        attrs = {
+            self.pl1: "cpu_longterm_power_limit",
+            self.pl2: "cpu_shortterm_power_limit",
+            self.cross_load: "cpu_cross_loading_power_limit",
+            self.cpu_temp: "cpu_temperature_limit",
+            self.total_ac: "cpu_peak_power_limit",
+            self.gpu_temp: "gpu_temperature_limit",
+            None: "gpu_ppab_power_limit",  # dyn_boost
+            None: "gpu_ctgp_power_limit",  # ctgp
+            None: "maximum_fanspeed",      # max_fan
+        }
+        def add_cmd(attr_name, value):
+            feat = getattr(self.m, attr_name, None)
+            if feat and feat.exists():
+                cmds.append(f"echo {value} > {feat.filename}")
+
+        for slider, attr_name in [
             (self.pl1, "cpu_longterm_power_limit"),
             (self.pl2, "cpu_shortterm_power_limit"),
             (self.cross_load, "cpu_cross_loading_power_limit"),
             (self.cpu_temp, "cpu_temperature_limit"),
             (self.total_ac, "cpu_peak_power_limit"),
             (self.gpu_temp, "gpu_temperature_limit"),
-        ]
-        for slider, attr_name in slider_map:
-            feat = getattr(self.m, attr_name, None)
-            if feat and feat.exists():
-                cmds.append(f"echo {int(slider.get_value())} > {feat.filename}")
+        ]:
+            add_cmd(attr_name, int(slider.get_value()))
 
-        # Max fan speed
-        # Dynamic Boost dropdown → actual wattage value
-        dyn_val = [5, 10, 15][self.dyn_boost.get_selected()]
-        feat = getattr(self.m, "gpu_ppab_power_limit", None)
-        if feat and feat.exists():
-            cmds.append(f"echo {dyn_val} > {feat.filename}")
-        # Configurable TGP dropdown → actual wattage value
-        ctgp_val = [60, 65, 70, 75, 80][self.ctgp.get_selected()]
-        feat = getattr(self.m, "gpu_ctgp_power_limit", None)
-        if feat and feat.exists():
-            cmds.append(f"echo {ctgp_val} > {feat.filename}")
+        # Dynamic Boost
+        add_cmd("gpu_ppab_power_limit",
+                [5, 10, 15][self.dyn_boost.get_selected()])
+        # Configurable TGP
+        add_cmd("gpu_ctgp_power_limit",
+                [60, 65, 70, 75, 80][self.ctgp.get_selected()])
+        # Maximum fan speed
+        add_cmd("maximum_fanspeed",
+                1 if self.max_fan.get_active() else 0)
 
-        feat = getattr(self.m, "maximum_fanspeed", None)
-        if feat and feat.exists():
-            cmds.append(f"echo {1 if self.max_fan.get_active() else 0} > {feat.filename}")
-
-        # Fan curve — Enabled after successfully verifying the kernel fix!
+        # Fan curve
         fan_cmd = " ".join([f"{pt[0]}:{pt[1]}:{pt[2]}" for pt in self.graph.points])
-        fancurve_path = os.path.join(SYSFS_BASE, "fancurve")
-        cmds.append(f"echo '{fan_cmd}' > {fancurve_path}")
+        cmds.append(f"echo '{fan_cmd}' > {os.path.join(SYSFS_BASE, 'fancurve')}")
 
-        # PL1 Tau (Short Term Power Limit Duration)
-        tau_feat = getattr(self.m, "cpu_pl1_tau", None)
-        if tau_feat and tau_feat.exists():
-            cmds.append(f"echo {tau_vals[self.pl2_duration.get_selected()]} > {tau_feat.filename}")
+        # PL1 Tau
+        add_cmd("cpu_pl1_tau", tau_vals[self.pl2_duration.get_selected()])
 
         if cmds:
             hw_write(" && ".join(cmds))
@@ -394,7 +399,9 @@ class LegionApp(Adw.Application):
         if time.time() < self.lock_time: return
         try:
             curr = self.m.platform_profile.get()
-            display_curr = "balanced-performance" if curr == "custom" else curr
+            # Map kernel values to display values (handles aliases)
+            mode_alias = {"custom": "balanced-performance", "quiet": "low-power"}
+            display_curr = mode_alias.get(curr, curr)
             self.mode.handler_block_by_func(self.on_mode)
             for i, nv in enumerate(self.mode_values):
                 if nv.value == display_curr: self.mode.set_selected(i); break
@@ -415,8 +422,11 @@ class LegionApp(Adw.Application):
     def on_mode(self, row, p):
         self.lock_time = time.time() + 4.0; sel = row.get_selected()
         mode_val = self.mode_values[sel].value
+        # Kernel expects "custom" not "balanced-performance" for custom mode
+        write_map = {"balanced-performance": "custom"}
+        write_val = write_map.get(mode_val, mode_val)
         self.mode_btn.set_visible(mode_val in ["255", "custom", "balanced-performance"])
-        hw_write(f"echo {mode_val} > {self.m.platform_profile.filename}")
+        hw_write(f"echo {write_val} > {self.m.platform_profile.filename}")
     def on_batt(self, row, p):
         self.lock_time = time.time() + 4.0; active = row.get_active()
         if active:
