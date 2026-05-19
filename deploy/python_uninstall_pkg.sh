@@ -10,8 +10,9 @@ if [ "$EUID" -ne 0 ]; then
 	exit
 fi
 
-rm /usr/share/applications/legion_gui.desktop
-rm /usr/share/applications/legion_gui_user.desktop
+# legion_gui files removed in favor of GTK4 UI under GTK4 UI/
+# rm /usr/share/applications/legion_gui.desktop
+# rm /usr/share/applications/legion_gui_user.desktop
 rm /usr/share/icons/legion_logo.png
 rm /usr/share/polkit-1/actions/legion_cli.policy
 rm /usr/share/polkit-1/actions/legion_gui.policy

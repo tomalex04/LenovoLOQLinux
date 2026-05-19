@@ -38,18 +38,18 @@ You will need to install the following dependencies to compile the kernel driver
 ### Ubuntu / Debian / Pop!_OS / Mint
 ```bash
 sudo apt-get update
-sudo apt-get install -y make gcc linux-headers-$(uname -r) build-essential git lm-sensors python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1
+sudo apt-get install -y make gcc linux-headers-$(uname -r) build-essential git lm-sensors python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1 python3-pip python3-pil python3-yaml
 ```
 
 ### Fedora / RHEL
 ```bash
-sudo dnf install -y kernel-headers kernel-devel dmidecode lm_sensors gcc make gtk4 python3-gobject
+sudo dnf install -y kernel-headers kernel-devel dmidecode lm_sensors gcc make gtk4 python3-gobject python3-pillow python3-yaml python3-pip
 sudo dnf groupinstall "Development Tools"
 ```
 
 ### Arch / Manjaro
 ```bash
-sudo pacman -S linux-headers base-devel lm_sensors gtk4 libadwaita python-gobject
+sudo pacman -S linux-headers base-devel lm_sensors gtk4 libadwaita python-gobject python-pillow python-yaml python-pip
 ```
 
 ## :hammer_and_wrench: Installation & Testing

@@ -4754,39 +4754,6 @@ static int ec_write_power_limit_16(struct legion_private *priv,
 	return 0;
 }
 
-#define DEFINE_EC_POWER_LIMIT_ATTR_RW(name, reg_field) \
-static ssize_t name##_show(struct device *dev, \
-			   struct device_attribute *attr, char *buf) \
-{ \
-	struct legion_private *priv = dev_get_drvdata(dev); \
-	int val; \
-	int ret = ec_read_power_limit_16(priv, \
-		priv->conf->registers->reg_field, &val); \
-	if (ret) \
-		return show_simple_wmi_attribute_from_buffer(dev, attr, buf, \
-			WMI_GUID_LENOVO_CPU_METHOD, 0, \
-			WMI_METHOD_ID_CPU_GET_##reg_field, 16, 0, 1); \
-	return sysfs_emit(buf, "%d\n", val); \
-} \
-static ssize_t name##_store(struct device *dev, \
-			    struct device_attribute *attr, \
-			    const char *buf, size_t count) \
-{ \
-	struct legion_private *priv = dev_get_drvdata(dev); \
-	int val; \
-	int ret; \
-	ret = kstrtoint(buf, 0, &val); \
-	if (ret) return ret; \
-	ret = ec_write_power_limit_16(priv, \
-		priv->conf->registers->reg_field, val); \
-	if (ret) \
-		return store_simple_wmi_attribute(dev, attr, buf, count, \
-			WMI_GUID_LENOVO_CPU_METHOD, 0, \
-			WMI_METHOD_ID_CPU_SET_##reg_field, false, 1); \
-	return count; \
-} \
-static DEVICE_ATTR_RW(name)
-
 static ssize_t cpu_shortterm_powerlimit_show(struct device *dev,
 					     struct device_attribute *attr,
 					     char *buf)
@@ -4808,7 +4775,8 @@ static ssize_t cpu_shortterm_powerlimit_store(struct device *dev,
 	struct legion_private *priv = dev_get_drvdata(dev);
 	int val, ret;
 	ret = kstrtoint(buf, 0, &val);
-	if (ret) return ret;
+	if (ret)
+		return ret;
 	if (!ec_write_power_limit_16(priv,
 		priv->conf->registers->EXT_CPU_SHORT_TERM_POWER_LIMIT, val))
 		return count;
@@ -4840,7 +4808,8 @@ static ssize_t cpu_longterm_powerlimit_store(struct device *dev,
 	struct legion_private *priv = dev_get_drvdata(dev);
 	int val, ret;
 	ret = kstrtoint(buf, 0, &val);
-	if (ret) return ret;
+	if (ret)
+		return ret;
 	if (!ec_write_power_limit_16(priv,
 		priv->conf->registers->EXT_CPU_LONG_TERM_POWER_LIMIT, val))
 		return count;
@@ -4884,7 +4853,8 @@ static ssize_t cpu_peak_powerlimit_store(struct device *dev,
 	struct legion_private *priv = dev_get_drvdata(dev);
 	int val, ret;
 	ret = kstrtoint(buf, 0, &val);
-	if (ret) return ret;
+	if (ret)
+		return ret;
 	ret = ec_write_power_limit_16(priv,
 		priv->conf->registers->EXT_CPU_PEAK_POWER_LIMIT, val);
 	if (ret)
@@ -4938,7 +4908,8 @@ static ssize_t cpu_cross_loading_powerlimit_store(struct device *dev,
 	struct legion_private *priv = dev_get_drvdata(dev);
 	int val, ret;
 	ret = kstrtoint(buf, 0, &val);
-	if (ret) return ret;
+	if (ret)
+		return ret;
 	ret = ec_write_power_limit_16(priv,
 		priv->conf->registers->EXT_CPU_CROSS_LOAD_POWER_LIMIT, val);
 	if (ret)
@@ -4992,7 +4963,8 @@ static ssize_t gpu_ppab_powerlimit_store(struct device *dev,
 	struct legion_private *priv = dev_get_drvdata(dev);
 	int val, ret;
 	ret = kstrtoint(buf, 0, &val);
-	if (ret) return ret;
+	if (ret)
+		return ret;
 	ret = ec_write_power_limit_16(priv,
 		priv->conf->registers->EXT_GPU_PPAB_POWER_LIMIT, val);
 	if (ret)
@@ -5026,7 +4998,8 @@ static ssize_t gpu_ctgp_powerlimit_store(struct device *dev,
 	struct legion_private *priv = dev_get_drvdata(dev);
 	int val, ret;
 	ret = kstrtoint(buf, 0, &val);
-	if (ret) return ret;
+	if (ret)
+		return ret;
 	ret = ec_write_power_limit_16(priv,
 		priv->conf->registers->EXT_GPU_CTGP_POWER_LIMIT, val);
 	if (ret)
@@ -5082,7 +5055,8 @@ static ssize_t gpu_temperature_limit_store(struct device *dev,
 	struct legion_private *priv = dev_get_drvdata(dev);
 	int val, ret;
 	ret = kstrtoint(buf, 0, &val);
-	if (ret) return ret;
+	if (ret)
+		return ret;
 	ret = ec_write_power_limit_16(priv,
 		priv->conf->registers->EXT_GPU_TEMPERATURE_LIMIT, val);
 	if (ret)
@@ -5115,7 +5089,8 @@ static ssize_t cpu_temperature_limit_store(struct device *dev,
 	u16 off = priv->conf->registers->EXT_CPU_TEMPERATURE_LIMIT;
 	int val, ret;
 	ret = kstrtoint(buf, 0, &val);
-	if (ret) return ret;
+	if (ret)
+		return ret;
 	if (off && off != 0xC5a0 && priv->ec_memoryio.virtual_start &&
 	    !ecram_memoryio_write(&priv->ec_memoryio, off, val & 0xFF))
 		return count;
@@ -5144,7 +5119,8 @@ static ssize_t cpu_pl1_tau_store(struct device *dev,
 	u16 off = priv->conf->registers->EXT_CPU_PL1_TAU;
 	int val, ret;
 	ret = kstrtoint(buf, 0, &val);
-	if (ret) return ret;
+	if (ret)
+		return ret;
 	if (off && off != 0xC5a0 && priv->ec_memoryio.virtual_start &&
 	    !ecram_memoryio_write(&priv->ec_memoryio, off, val & 0xFF))
 		return count;

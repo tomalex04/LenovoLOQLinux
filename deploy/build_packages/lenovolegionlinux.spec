@@ -65,8 +65,6 @@ rm -rf %{buildroot}/usr/lib/debug
 %{python3_sitelib}/%{libname}
 %{python3_sitelib}/%{libname}-%{version}.dist-info
 %{_bindir}/legion_cli
-%{_bindir}/legion_gui
-%{_datadir}/applications/legion_gui.desktop
 %{_datadir}/legion_linux/legiond.ini
 %{_datadir}/legion_linux/balanced-ac.yaml
 %{_datadir}/legion_linux/balanced-battery.yaml
