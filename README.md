@@ -31,6 +31,12 @@ This project brings hardware-level tuning and custom power/thermal management sp
   - Battery Conservation mode (stops charging at 80% to prolong battery health).
   - Rapid Charging mode.
 
+> **⚠️ Known Limitations ⚠️**
+> The following features are present in the GUI but are **not yet functional** due to missing EC register mappings:
+> - **Preset profiles** in Custom Mode (max/min buttons are placeholders)
+> - **Fan curve writes** — reading the curve works, but applying changes to hardware is not yet implemented
+> - **Maximum Fan Speed toggle** — the underlying sysfs node is not connected on this model
+
 ## :gear: Prerequisites
 
 You will need to install the following dependencies to compile the kernel driver and run the GTK4 GUI.
