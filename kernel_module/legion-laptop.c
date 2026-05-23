@@ -3,7 +3,9 @@
  *  legion-laptop.c - Extra Lenovo Legion laptop support, in
  *   particular for fan curve control and power mode.
  *
+ *  Based on LenovoLegionLinux by johnfanv2 (GPL-2.0)
  *  Copyright (C) 2022 johnfan <johnfan (at) example (dot) com>
+ *  Adapted for LOQ 15IAX9 by tomalex04
  *
  *
  *  This driver might work on other Lenovo Legion models. If you
@@ -14,8 +16,11 @@
  *  Support for other hardware of this model is already partially
  *  provided by the module ideapad-laptop.
  *
- *  The development page for this driver is located at
+ *  Original project:
  *  https://github.com/johnfanv2/LenovoLegionLinux
+ *
+ *  LOQ 15IAX9 adaptation:
+ *  https://github.com/tomalex04/LenovoLOQLinux
  *
  *  This driver exports the files:
  *    - /sys/kernel/debug/legion/fancurve (ro)
@@ -77,7 +82,7 @@
 #include <linux/version.h>
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("johnfan");
+MODULE_AUTHOR("tomalex04 (based on LenovoLegionLinux by johnfan)");
 MODULE_DESCRIPTION("Lenovo Legion laptop extras");
 
 static bool force;

@@ -177,6 +177,10 @@ Settings are saved to `~/.config/legion_linux/profiles.json` and restored via "R
 
 **Fan curve read-back incorrect:** Known limitation. The GUI uses saved profile values, not hwmon read-back, to avoid corrupted data.
 
+## :pray: Thanks
+
+This project is built on top of **[LenovoLegionLinux](https://github.com/johnfanv2/LenovoLegionLinux)** by johnfanv2 — the original kernel driver that reverse-engineered the EC communication, WMI methods, and fan curve control for Lenovo Legion laptops. Without that foundational work, this LOQ 15IAX9 adaptation would not exist.
+
 ## :scroll: License
 
-See [LICENSE](LICENSE).
+GPL-2.0. See [LICENSE](LICENSE).
