@@ -3513,40 +3513,40 @@ static int ec_read_fancurve_loq(struct ecram *ecram,
 				struct fancurve *fancurve)
 {
 	size_t i = 0;
-	size_t struct_offset_ecram = 3;
 	size_t struct_offset_ecramsys = 6;
 
 	fancurve->fan_speed_unit = FAN_SPEED_UNIT_RPM_HUNDRED;
 	for (i = 0; i < FANCURVESIZE_LOQ; ++i) {
 		struct fancurve_point *point = &fancurve->points[i];
 
+		/* Read from staging area (matches ec_write_fancurve_loq) */
 		point->speed1 =
-			ecram_read(ecram, model->registers->EXT_FAN1_RPM_LSB +
-						  (i * struct_offset_ecram));
+			ecram_read(ecram, model->registers->EXT_FAN1_BASE +
+						(i * struct_offset_ecramsys));
 		point->speed2 =
-			ecram_read(ecram, model->registers->EXT_FAN2_RPM_LSB +
-						  (i * struct_offset_ecram));
+			ecram_read(ecram, model->registers->EXT_FAN2_BASE +
+						(i * struct_offset_ecramsys));
 
 		point->accel = 0;
 		point->decel = 0;
 		point->cpu_max_temp_celsius =
-			ecram_read(ecram, model->registers->EXT_FAN1_RPM_LSB +
-						  (i * struct_offset_ecram) - 1);
+			ecram_read(ecram, model->registers->EXT_CPU_TEMP +
+						(i * struct_offset_ecramsys));
 		point->cpu_min_temp_celsius =
-			ecram_read(ecram, model->registers->EXT_FAN1_RPM_LSB +
-						  (i * struct_offset_ecram) - 2);
+			ecram_read(ecram, model->registers->EXT_CPU_TEMP_HYST +
+						(i * struct_offset_ecramsys));
 		point->gpu_max_temp_celsius =
-			ecram_read(ecram, model->registers->EXT_FAN2_RPM_LSB +
-						  (i * struct_offset_ecram) - 1);
+			ecram_read(ecram, model->registers->EXT_GPU_TEMP +
+						(i * struct_offset_ecramsys));
 		point->gpu_min_temp_celsius =
-			ecram_read(ecram, model->registers->EXT_FAN2_RPM_LSB +
-						  (i * struct_offset_ecram) - 2);
+			ecram_read(ecram, model->registers->EXT_GPU_TEMP_HYST +
+						(i * struct_offset_ecramsys));
 		point->ic_max_temp_celsius =
 			ecram_read(ecram, model->registers->EXT_VRM_TEMP +
-						  (i * struct_offset_ecramsys));
+						(i * struct_offset_ecramsys));
 		point->ic_min_temp_celsius =
 			ecram_read(ecram, model->registers->EXT_VRM_TEMP_HYST +
-						  (i * struct_offset_ecramsys));
+						(i * struct_offset_ecramsys));
 	}
 
 	fancurve->size = FANCURVESIZE_LOQ;
