@@ -4759,13 +4759,19 @@ static ssize_t cpu_shortterm_powerlimit_show(struct device *dev,
 					     char *buf)
 {
 	struct legion_private *priv = dev_get_drvdata(dev);
+	ssize_t ret;
 	int val;
+	/* WMI first: reads BIOS-programmed CPU power limits */
+	ret = show_simple_wmi_attribute_from_buffer(dev, attr, buf,
+		WMI_GUID_LENOVO_CPU_METHOD, 0,
+		WMI_METHOD_ID_CPU_GET_SHORTTERM_POWERLIMIT, 16, 0, 1);
+	if (ret >= 0)
+		return ret;
+	/* EC fallback */
 	if (!ec_read_power_limit_16(priv,
 		priv->conf->registers->EXT_CPU_SHORT_TERM_POWER_LIMIT, &val))
 		return sysfs_emit(buf, "%d\n", val);
-	return show_simple_wmi_attribute_from_buffer(dev, attr, buf,
-		WMI_GUID_LENOVO_CPU_METHOD, 0,
-		WMI_METHOD_ID_CPU_GET_SHORTTERM_POWERLIMIT, 16, 0, 1);
+	return -EOPNOTSUPP;
 }
 
 static ssize_t cpu_shortterm_powerlimit_store(struct device *dev,
@@ -4774,15 +4780,18 @@ static ssize_t cpu_shortterm_powerlimit_store(struct device *dev,
 {
 	struct legion_private *priv = dev_get_drvdata(dev);
 	int val, ret;
+	ssize_t wmi_ret;
 	ret = kstrtoint(buf, 0, &val);
 	if (ret)
 		return ret;
-	if (!ec_write_power_limit_16(priv,
-		priv->conf->registers->EXT_CPU_SHORT_TERM_POWER_LIMIT, val))
-		return count;
-	return store_simple_wmi_attribute(dev, attr, buf, count,
+	/* WMI first: programs CPU power limits via BIOS (what Vantage uses) */
+	wmi_ret = store_simple_wmi_attribute(dev, attr, buf, count,
 		WMI_GUID_LENOVO_CPU_METHOD, 0,
 		WMI_METHOD_ID_CPU_SET_SHORTTERM_POWERLIMIT, false, 1);
+	/* EC second: keep sysfs read-back consistent */
+	ec_write_power_limit_16(priv,
+		priv->conf->registers->EXT_CPU_SHORT_TERM_POWER_LIMIT, val);
+	return (wmi_ret > 0) ? wmi_ret : count;
 }
 
 static DEVICE_ATTR_RW(cpu_shortterm_powerlimit);
@@ -4792,13 +4801,19 @@ static ssize_t cpu_longterm_powerlimit_show(struct device *dev,
 					    char *buf)
 {
 	struct legion_private *priv = dev_get_drvdata(dev);
+	ssize_t ret;
 	int val;
+	/* WMI first: reads BIOS-programmed CPU power limits */
+	ret = show_simple_wmi_attribute_from_buffer(dev, attr, buf,
+		WMI_GUID_LENOVO_CPU_METHOD, 0,
+		WMI_METHOD_ID_CPU_GET_LONGTERM_POWERLIMIT, 16, 0, 1);
+	if (ret >= 0)
+		return ret;
+	/* EC fallback */
 	if (!ec_read_power_limit_16(priv,
 		priv->conf->registers->EXT_CPU_LONG_TERM_POWER_LIMIT, &val))
 		return sysfs_emit(buf, "%d\n", val);
-	return show_simple_wmi_attribute_from_buffer(dev, attr, buf,
-		WMI_GUID_LENOVO_CPU_METHOD, 0,
-		WMI_METHOD_ID_CPU_GET_LONGTERM_POWERLIMIT, 16, 0, 1);
+	return -EOPNOTSUPP;
 }
 
 static ssize_t cpu_longterm_powerlimit_store(struct device *dev,
@@ -4807,15 +4822,18 @@ static ssize_t cpu_longterm_powerlimit_store(struct device *dev,
 {
 	struct legion_private *priv = dev_get_drvdata(dev);
 	int val, ret;
+	ssize_t wmi_ret;
 	ret = kstrtoint(buf, 0, &val);
 	if (ret)
 		return ret;
-	if (!ec_write_power_limit_16(priv,
-		priv->conf->registers->EXT_CPU_LONG_TERM_POWER_LIMIT, val))
-		return count;
-	return store_simple_wmi_attribute(dev, attr, buf, count,
+	/* WMI first: programs CPU power limits via BIOS (what Vantage uses) */
+	wmi_ret = store_simple_wmi_attribute(dev, attr, buf, count,
 		WMI_GUID_LENOVO_CPU_METHOD, 0,
 		WMI_METHOD_ID_CPU_SET_LONGTERM_POWERLIMIT, false, 1);
+	/* EC second: keep sysfs read-back consistent */
+	ec_write_power_limit_16(priv,
+		priv->conf->registers->EXT_CPU_LONG_TERM_POWER_LIMIT, val);
+	return (wmi_ret > 0) ? wmi_ret : count;
 }
 
 static DEVICE_ATTR_RW(cpu_longterm_powerlimit);
@@ -4836,14 +4854,19 @@ static ssize_t cpu_peak_powerlimit_show(struct device *dev,
 					char *buf)
 {
 	struct legion_private *priv = dev_get_drvdata(dev);
+	ssize_t ret;
 	int val;
-	int ret = ec_read_power_limit_16(priv,
-		priv->conf->registers->EXT_CPU_PEAK_POWER_LIMIT, &val);
-	if (ret)
-		return show_simple_wmi_attribute(dev, attr, buf,
-			WMI_GUID_LENOVO_GPU_METHOD, 0,
-			WMI_METHOD_ID_CPU_GET_PEAK_POWERLIMIT, false, 1);
-	return sysfs_emit(buf, "%d\n", val);
+	/* WMI first */
+	ret = show_simple_wmi_attribute_from_buffer(dev, attr, buf,
+		WMI_GUID_LENOVO_GPU_METHOD, 0,
+		WMI_METHOD_ID_CPU_GET_PEAK_POWERLIMIT, 16, 0, 1);
+	if (ret >= 0)
+		return ret;
+	/* EC fallback */
+	if (!ec_read_power_limit_16(priv,
+		priv->conf->registers->EXT_CPU_PEAK_POWER_LIMIT, &val))
+		return sysfs_emit(buf, "%d\n", val);
+	return -EOPNOTSUPP;
 }
 
 static ssize_t cpu_peak_powerlimit_store(struct device *dev,
@@ -4851,16 +4874,22 @@ static ssize_t cpu_peak_powerlimit_store(struct device *dev,
 					 const char *buf, size_t count)
 {
 	struct legion_private *priv = dev_get_drvdata(dev);
-	int val, ret;
+	int val, ret, wmi_out;
 	ret = kstrtoint(buf, 0, &val);
 	if (ret)
 		return ret;
-	ret = ec_write_power_limit_16(priv,
+	/* WMI Other Method first — what Vantage uses */
+	if (!wmi_other_method_set_value(OtherMethodFeature_CPU_PEAK_POWER_LIMIT, val, &wmi_out))
+		goto ec_sync;
+	/* Simple WMI fallback */
+	if (store_simple_wmi_attribute(dev, attr, buf, count,
+		WMI_GUID_LENOVO_GPU_METHOD, 0,
+		WMI_METHOD_ID_CPU_SET_PEAK_POWERLIMIT, false, 1) > 0)
+		goto ec_sync;
+ec_sync:
+	/* EC last — keep sysfs read-back consistent */
+	ec_write_power_limit_16(priv,
 		priv->conf->registers->EXT_CPU_PEAK_POWER_LIMIT, val);
-	if (ret)
-		return store_simple_wmi_attribute(dev, attr, buf, count,
-			WMI_GUID_LENOVO_GPU_METHOD, 0,
-			WMI_METHOD_ID_CPU_SET_PEAK_POWERLIMIT, false, 1);
 	return count;
 }
 
@@ -4891,14 +4920,19 @@ static ssize_t cpu_cross_loading_powerlimit_show(struct device *dev,
 						 char *buf)
 {
 	struct legion_private *priv = dev_get_drvdata(dev);
+	ssize_t ret;
 	int val;
-	int ret = ec_read_power_limit_16(priv,
-		priv->conf->registers->EXT_CPU_CROSS_LOAD_POWER_LIMIT, &val);
-	if (ret)
-		return show_simple_wmi_attribute(dev, attr, buf,
-			WMI_GUID_LENOVO_GPU_METHOD, 0,
-			WMI_METHOD_ID_CPU_GET_CROSS_LOADING_POWERLIMIT, false, 1);
-	return sysfs_emit(buf, "%d\n", val);
+	/* WMI first */
+	ret = show_simple_wmi_attribute_from_buffer(dev, attr, buf,
+		WMI_GUID_LENOVO_GPU_METHOD, 0,
+		WMI_METHOD_ID_CPU_GET_CROSS_LOADING_POWERLIMIT, 16, 0, 1);
+	if (ret >= 0)
+		return ret;
+	/* EC fallback */
+	if (!ec_read_power_limit_16(priv,
+		priv->conf->registers->EXT_CPU_CROSS_LOAD_POWER_LIMIT, &val))
+		return sysfs_emit(buf, "%d\n", val);
+	return -EOPNOTSUPP;
 }
 
 static ssize_t cpu_cross_loading_powerlimit_store(struct device *dev,
@@ -4906,16 +4940,22 @@ static ssize_t cpu_cross_loading_powerlimit_store(struct device *dev,
 						  const char *buf, size_t count)
 {
 	struct legion_private *priv = dev_get_drvdata(dev);
-	int val, ret;
+	int val, ret, wmi_out;
 	ret = kstrtoint(buf, 0, &val);
 	if (ret)
 		return ret;
-	ret = ec_write_power_limit_16(priv,
+	/* WMI Other Method first — what Vantage uses */
+	if (!wmi_other_method_set_value(OtherMethodFeature_CPU_CROSS_LOAD_POWER_LIMIT, val, &wmi_out))
+		goto ec_sync;
+	/* Simple WMI fallback */
+	if (store_simple_wmi_attribute(dev, attr, buf, count,
+		WMI_GUID_LENOVO_GPU_METHOD, 0,
+		WMI_METHOD_ID_CPU_SET_CROSS_LOADING_POWERLIMIT, false, 1) > 0)
+		goto ec_sync;
+ec_sync:
+	/* EC last — keep sysfs read-back consistent */
+	ec_write_power_limit_16(priv,
 		priv->conf->registers->EXT_CPU_CROSS_LOAD_POWER_LIMIT, val);
-	if (ret)
-		return store_simple_wmi_attribute(dev, attr, buf, count,
-			WMI_GUID_LENOVO_GPU_METHOD, 0,
-			WMI_METHOD_ID_CPU_SET_CROSS_LOADING_POWERLIMIT, false, 1);
 	return count;
 }
 
@@ -4946,14 +4986,19 @@ static ssize_t gpu_ppab_powerlimit_show(struct device *dev,
 					char *buf)
 {
 	struct legion_private *priv = dev_get_drvdata(dev);
+	ssize_t ret;
 	int val;
-	int ret = ec_read_power_limit_16(priv,
-		priv->conf->registers->EXT_GPU_PPAB_POWER_LIMIT, &val);
-	if (ret)
-		return show_simple_wmi_attribute_from_buffer(dev, attr, buf,
-			WMI_GUID_LENOVO_GPU_METHOD, 0,
-			WMI_METHOD_ID_GPU_GET_PPAB_POWERLIMIT, 16, 0, 1);
-	return sysfs_emit(buf, "%d\n", val);
+	/* WMI first */
+	ret = show_simple_wmi_attribute_from_buffer(dev, attr, buf,
+		WMI_GUID_LENOVO_GPU_METHOD, 0,
+		WMI_METHOD_ID_GPU_GET_PPAB_POWERLIMIT, 16, 0, 1);
+	if (ret >= 0)
+		return ret;
+	/* EC fallback */
+	if (!ec_read_power_limit_16(priv,
+		priv->conf->registers->EXT_GPU_PPAB_POWER_LIMIT, &val))
+		return sysfs_emit(buf, "%d\n", val);
+	return -EOPNOTSUPP;
 }
 
 static ssize_t gpu_ppab_powerlimit_store(struct device *dev,
@@ -4961,16 +5006,21 @@ static ssize_t gpu_ppab_powerlimit_store(struct device *dev,
 					 const char *buf, size_t count)
 {
 	struct legion_private *priv = dev_get_drvdata(dev);
-	int val, ret;
+	int val, ret, wmi_out;
 	ret = kstrtoint(buf, 0, &val);
 	if (ret)
 		return ret;
-	ret = ec_write_power_limit_16(priv,
+	/* WMI Other Method first — what Vantage uses */
+	if (!wmi_other_method_set_value(OtherMethodFeature_GPU_POWER_BOOST, val, &wmi_out))
+		goto ec_sync;
+	/* Simple WMI fallback */
+	if (store_simple_wmi_attribute(dev, attr, buf, count,
+		WMI_GUID_LENOVO_GPU_METHOD, 0,
+		WMI_METHOD_ID_GPU_SET_PPAB_POWERLIMIT, false, 1) > 0)
+		goto ec_sync;
+ec_sync:
+	ec_write_power_limit_16(priv,
 		priv->conf->registers->EXT_GPU_PPAB_POWER_LIMIT, val);
-	if (ret)
-		return store_simple_wmi_attribute(dev, attr, buf, count,
-			WMI_GUID_LENOVO_GPU_METHOD, 0,
-			WMI_METHOD_ID_GPU_SET_PPAB_POWERLIMIT, false, 1);
 	return count;
 }
 
@@ -4981,14 +5031,19 @@ static ssize_t gpu_ctgp_powerlimit_show(struct device *dev,
 					char *buf)
 {
 	struct legion_private *priv = dev_get_drvdata(dev);
+	ssize_t ret;
 	int val;
-	int ret = ec_read_power_limit_16(priv,
-		priv->conf->registers->EXT_GPU_CTGP_POWER_LIMIT, &val);
-	if (ret)
-		return show_simple_wmi_attribute_from_buffer(dev, attr, buf,
-			WMI_GUID_LENOVO_GPU_METHOD, 0,
-			WMI_METHOD_ID_GPU_GET_CTGP_POWERLIMIT, 16, 0, 1);
-	return sysfs_emit(buf, "%d\n", val);
+	/* WMI first */
+	ret = show_simple_wmi_attribute_from_buffer(dev, attr, buf,
+		WMI_GUID_LENOVO_GPU_METHOD, 0,
+		WMI_METHOD_ID_GPU_GET_CTGP_POWERLIMIT, 16, 0, 1);
+	if (ret >= 0)
+		return ret;
+	/* EC fallback */
+	if (!ec_read_power_limit_16(priv,
+		priv->conf->registers->EXT_GPU_CTGP_POWER_LIMIT, &val))
+		return sysfs_emit(buf, "%d\n", val);
+	return -EOPNOTSUPP;
 }
 
 static ssize_t gpu_ctgp_powerlimit_store(struct device *dev,
@@ -4996,16 +5051,21 @@ static ssize_t gpu_ctgp_powerlimit_store(struct device *dev,
 					 const char *buf, size_t count)
 {
 	struct legion_private *priv = dev_get_drvdata(dev);
-	int val, ret;
+	int val, ret, wmi_out;
 	ret = kstrtoint(buf, 0, &val);
 	if (ret)
 		return ret;
-	ret = ec_write_power_limit_16(priv,
+	/* WMI Other Method first — what Vantage uses */
+	if (!wmi_other_method_set_value(OtherMethodFeature_GPU_cTGP, val, &wmi_out))
+		goto ec_sync;
+	/* Simple WMI fallback */
+	if (store_simple_wmi_attribute(dev, attr, buf, count,
+		WMI_GUID_LENOVO_GPU_METHOD, 0,
+		WMI_METHOD_ID_GPU_SET_CTGP_POWERLIMIT, false, 1) > 0)
+		goto ec_sync;
+ec_sync:
+	ec_write_power_limit_16(priv,
 		priv->conf->registers->EXT_GPU_CTGP_POWER_LIMIT, val);
-	if (ret)
-		return store_simple_wmi_attribute(dev, attr, buf, count,
-			WMI_GUID_LENOVO_GPU_METHOD, 0,
-			WMI_METHOD_ID_GPU_SET_CTGP_POWERLIMIT, false, 1);
 	return count;
 }
 
@@ -5039,13 +5099,14 @@ static ssize_t gpu_temperature_limit_show(struct device *dev,
 {
 	struct legion_private *priv = dev_get_drvdata(dev);
 	int val;
-	int ret = ec_read_power_limit_16(priv,
-		priv->conf->registers->EXT_GPU_TEMPERATURE_LIMIT, &val);
-	if (ret)
-		return show_simple_wmi_attribute(dev, attr, buf,
-			WMI_GUID_LENOVO_GPU_METHOD, 0,
-			WMI_METHOD_ID_GPU_GET_TEMPERATURE_LIMIT, false, 1);
-	return sysfs_emit(buf, "%d\n", val);
+	/* EC first (known working read) */
+	if (!ec_read_power_limit_16(priv,
+		priv->conf->registers->EXT_GPU_TEMPERATURE_LIMIT, &val))
+		return sysfs_emit(buf, "%d\n", val);
+	/* WMI fallback */
+	return show_simple_wmi_attribute(dev, attr, buf,
+		WMI_GUID_LENOVO_GPU_METHOD, 0,
+		WMI_METHOD_ID_GPU_GET_TEMPERATURE_LIMIT, false, 1);
 }
 
 static ssize_t gpu_temperature_limit_store(struct device *dev,
@@ -5053,16 +5114,21 @@ static ssize_t gpu_temperature_limit_store(struct device *dev,
 					   const char *buf, size_t count)
 {
 	struct legion_private *priv = dev_get_drvdata(dev);
-	int val, ret;
+	int val, ret, wmi_out;
 	ret = kstrtoint(buf, 0, &val);
 	if (ret)
 		return ret;
-	ret = ec_write_power_limit_16(priv,
+	/* WMI Other Method first — what Vantage uses */
+	if (!wmi_other_method_set_value(OtherMethodFeature_GPU_TEMPERATURE_LIMIT, val, &wmi_out))
+		goto ec_sync;
+	/* Simple WMI fallback */
+	if (store_simple_wmi_attribute(dev, attr, buf, count,
+		WMI_GUID_LENOVO_GPU_METHOD, 0,
+		WMI_METHOD_ID_GPU_SET_TEMPERATURE_LIMIT, false, 1) > 0)
+		goto ec_sync;
+ec_sync:
+	ec_write_power_limit_16(priv,
 		priv->conf->registers->EXT_GPU_TEMPERATURE_LIMIT, val);
-	if (ret)
-		return store_simple_wmi_attribute(dev, attr, buf, count,
-			WMI_GUID_LENOVO_GPU_METHOD, 0,
-			WMI_METHOD_ID_GPU_SET_TEMPERATURE_LIMIT, false, 1);
 	return count;
 }
 
