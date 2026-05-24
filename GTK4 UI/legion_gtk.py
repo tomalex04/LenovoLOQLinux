@@ -143,6 +143,9 @@ class CustomSettingsWindow(Adw.Window):
         self.preset_combo.set_hexpand(True)
         self.preset_combo.connect("notify::selected", self.on_preset_changed)
         top_bar.append(self.preset_combo)
+        edit_btn = Gtk.Button(icon_name="document-edit-symbolic", css_classes=["flat", "circular"])
+        edit_btn.connect("clicked", lambda b: self.on_rename_preset())
+        top_bar.append(edit_btn)
         del_btn = Gtk.Button(icon_name="user-trash-symbolic", css_classes=["flat", "circular"])
         del_btn.connect("clicked", lambda b: self.on_delete_preset())
         top_bar.append(del_btn)
@@ -359,22 +362,51 @@ class CustomSettingsWindow(Adw.Window):
         self.max_fan.set_active(p.get("max_fan", False))
 
     def on_add_preset(self):
-        """Save current settings as a new preset."""
+        """Ask for name, then save current settings as a new preset."""
         dialog = Adw.MessageDialog(
             transient_for=self, heading="New Preset",
-            body="Save current settings as a new preset?"
+            body="Enter a name for the new preset:"
         )
         dialog.add_response("cancel", "Cancel")
         dialog.add_response("save", "Save")
         dialog.set_default_response("save")
         dialog.set_close_response("cancel")
-        dialog.connect("response", lambda d, resp: self._add_preset() if resp == "save" else None)
+        entry = Gtk.Entry(placeholder_text="Preset name", hexpand=True, margin_top=10, margin_bottom=10, margin_start=20, margin_end=20)
+        entry.set_text(f"Preset {len(self.profiles) + 1}")
+        dialog.get_content_area().append(entry)
+        dialog.connect("response", lambda d, resp: self._add_preset(entry.get_text()) if resp == "save" else None)
         dialog.present()
 
-    def _add_preset(self):
-        name = f"Preset {len(self.profiles) + 1}"
+    def _add_preset(self, name):
+        if not name or name in self.profiles: return
         self.current_profile_name = name
         self.sync_profile_from_ui(name)
+        self.save_profiles()
+        self.refresh_presets()
+
+    def on_rename_preset(self):
+        """Rename current preset."""
+        idx = self.preset_combo.get_selected()
+        if idx == -1: return
+        old_name = sorted(self.profiles.keys())[idx]
+        dialog = Adw.MessageDialog(
+            transient_for=self, heading="Rename Preset",
+            body=f"Enter a new name for '{old_name}':"
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("rename", "Rename")
+        dialog.set_default_response("rename")
+        dialog.set_close_response("cancel")
+        entry = Gtk.Entry(placeholder_text="New name", hexpand=True, margin_top=10, margin_bottom=10, margin_start=20, margin_end=20)
+        entry.set_text(old_name)
+        dialog.get_content_area().append(entry)
+        dialog.connect("response", lambda d, resp: self._rename_preset(old_name, entry.get_text()) if resp == "rename" else None)
+        dialog.present()
+
+    def _rename_preset(self, old_name, new_name):
+        if not new_name or new_name == old_name or new_name in self.profiles: return
+        self.profiles[new_name] = self.profiles.pop(old_name)
+        self.current_profile_name = new_name
         self.save_profiles()
         self.refresh_presets()
 
