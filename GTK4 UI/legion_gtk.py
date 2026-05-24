@@ -32,10 +32,10 @@ class FanCurveWidget(Gtk.DrawingArea):
     _RPM_MAP = {0: 1400, 43: 1700, 57: 2300, 71: 2800, 85: 3400, 100: 4000, 114: 4500, 128: 5000}
     # [cpu_temp, cpu_sensor_temp, gpu_temp, pwm_speed] — temps are static, pwm is drag-modifiable
     DEFAULTS = [
-        [60, 48, 42, 43], [64, 52, 48, 43], [68, 56, 54, 57],
-        [72, 60, 60, 57], [76, 64, 66, 71], [80, 68, 72, 71],
-        [84, 72, 80, 71], [88, 76, 88, 85], [93, 81, 94, 85],
-        [98, 86, 99, 85]
+        [60, 48, 42,   0], [64, 52, 48,  43], [68, 56, 54,  57],
+        [72, 60, 60,  71], [76, 64, 66,  85], [80, 68, 72,  85],
+        [84, 72, 80, 100], [88, 76, 88, 114], [93, 81, 94, 114],
+        [98, 86, 99, 128]
     ]
 
     def __init__(self):
@@ -156,11 +156,12 @@ class FanCurveWidget(Gtk.DrawingArea):
         if not ok: return
         y_from_bottom = h - (sy + dy - mt)
         ns = self.vis_to_snap(y_from_bottom, h)
+        # Enforce monotonicity: clamp to neighbours, don't cascade-reset others
+        if self.drag_idx > 0:
+            ns = max(ns, self.points[self.drag_idx - 1][3])
+        if self.drag_idx < N - 1:
+            ns = min(ns, self.points[self.drag_idx + 1][3])
         self.points[self.drag_idx][3] = ns
-        for j in range(self.drag_idx + 1, N):
-            if self.points[j][3] < ns: self.points[j][3] = ns
-        for j in range(self.drag_idx - 1, -1, -1):
-            if self.points[j][3] > ns: self.points[j][3] = ns
         self.queue_draw()
 
     def on_drag_end(self, g, dx, dy): self.drag_idx = -1; self.queue_draw()
@@ -381,8 +382,9 @@ class CustomSettingsWindow(Adw.Window):
                 N = len(self.graph.points)
                 for i in range(N):
                     pt = i + 1
-                    pwm = int(open(os.path.join(hwmon, f"pwm1_auto_point{pt}_pwm")).read())
-                    self.graph.points[i][3] = pwm
+                    raw_pwm = int(open(os.path.join(hwmon, f"pwm1_auto_point{pt}_pwm")).read())
+                    # Snap to nearest valid SNAP value so pwm_to_vis works correctly
+                    self.graph.points[i][3] = self.graph.snap(raw_pwm)
                 self.graph.queue_draw()
         except: pass
 
@@ -570,12 +572,7 @@ class CustomSettingsWindow(Adw.Window):
         add_cmd("maximum_fanspeed",
                 1 if self.max_fan.get_active() else 0)
 
-        # Fan curve disabled — EC commit broken
-        # HW = None
-        # for d in glob.glob("/sys/devices/pci0000:00/.../hwmon/hwmon*"):
-        #     ...
-        # See commented FanCurveWidget for details.
-        # Nothing to do here.
+        # Fan curve writes are handled below via hwmon
 
         # PL1 Tau
         add_cmd("cpu_pl1_tau", tau_vals[self.pl2_duration.get_selected()])
