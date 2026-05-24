@@ -30,10 +30,12 @@ class FanCurveWidget(Gtk.DrawingArea):
     SNAP = [0, 43, 57, 71, 85, 100, 114, 128]
     MAX_PWM = 128
     _RPM_MAP = {0: 1400, 43: 1700, 57: 2300, 71: 2800, 85: 3400, 100: 4000, 114: 4500, 128: 5000}
+    # [cpu_temp, cpu_sensor_temp, gpu_temp, pwm_speed] — temps are static, pwm is drag-modifiable
     DEFAULTS = [
-        [60, 42, 43], [64, 48, 43], [68, 54, 57], [72, 60, 71],
-        [76, 66, 85], [80, 72, 100], [84, 80, 114], [88, 88, 114],
-        [93, 94, 128], [98, 99, 128]
+        [60, 48, 42, 43], [64, 52, 48, 43], [68, 56, 54, 57],
+        [72, 60, 60, 57], [76, 64, 66, 71], [80, 68, 72, 71],
+        [84, 72, 80, 71], [88, 76, 88, 85], [93, 81, 94, 85],
+        [98, 86, 99, 85]
     ]
 
     def __init__(self):
@@ -82,33 +84,33 @@ class FanCurveWidget(Gtk.DrawingArea):
         cr.move_to(ml + w - 40, mt + h + 50); cr.show_text("100 °C")
         cr.set_source_rgb(0.35, 0.35, 0.35); cr.set_line_width(3)
         for i, p in enumerate(self.points):
-            x, y = ml + (i * w / (N - 1)), mt + h - (p[2] * h / self.MAX_PWM)
+            x, y = ml + (i * w / (N - 1)), mt + h - (p[3] * h / self.MAX_PWM)
             if i == 0: cr.move_to(x, y)
             else: cr.line_to(x, y)
         cr.stroke()
         cr.set_source_rgba(0.35, 0.35, 0.35, 0.15)
         for i, p in enumerate(self.points):
-            x, y = ml + (i * w / (N - 1)), mt + h - (p[2] * h / self.MAX_PWM)
+            x, y = ml + (i * w / (N - 1)), mt + h - (p[3] * h / self.MAX_PWM)
             if i == 0: cr.move_to(x, y)
             else: cr.line_to(x, y)
         cr.line_to(ml + ((N - 1) * w / (N - 1)), mt + h); cr.line_to(ml, mt + h); cr.close_path(); cr.fill()
         for i, p in enumerate(self.points):
-            x, y = ml + (i * w / (N - 1)), mt + h - (p[2] * h / self.MAX_PWM)
+            x, y = ml + (i * w / (N - 1)), mt + h - (p[3] * h / self.MAX_PWM)
             cr.arc(x, y, 7, 0, 2 * math.pi)
             cr.set_source_rgb(1, 0.2, 0.2) if i == self.drag_idx else cr.set_source_rgb(0.2, 0.7, 1)
             cr.fill()
         cr.set_source_rgb(0.3, 0.3, 0.3); cr.set_line_width(1)
         for i, p in enumerate(self.points):
-            x, y = ml + (i * w / (N - 1)), mt + h - (p[2] * h / self.MAX_PWM)
+            x, y = ml + (i * w / (N - 1)), mt + h - (p[3] * h / self.MAX_PWM)
             cr.move_to(x, y + 7); cr.line_to(x, mt + h)
         cr.stroke()
 
         if self.hover_idx >= 0:
             p = self.points[self.hover_idx]
             px = ml + (self.hover_idx * w / (N - 1))
-            py = mt + h - (p[2] * h / self.MAX_PWM)
-            rpm = self.rpm_for_pwm(p[2])
-            msg = f"P{self.hover_idx+1}: CPU={p[0]}°C GPU={p[1]}°C\nPWM={p[2]} ({rpm}RPM)"
+            py = mt + h - (p[3] * h / self.MAX_PWM)
+            rpm = self.rpm_for_pwm(p[3])
+            msg = f"P{self.hover_idx+1}: CPU={p[0]}°C Sensor={p[1]}°C GPU={p[2]}°C\nPWM={p[3]} ({rpm}RPM)"
             lines = msg.split("\n")
             tw, th = 0, 0
             for ln in lines:
@@ -128,7 +130,7 @@ class FanCurveWidget(Gtk.DrawingArea):
         ml, mt = 80, 20
         w, h = self.get_width() - ml - 20, self.get_height() - mt - 70
         for i, p in enumerate(self.points):
-            px, py = ml + (i * w / (N - 1)), mt + h - (p[2] * h / self.MAX_PWM)
+            px, py = ml + (i * w / (N - 1)), mt + h - (p[3] * h / self.MAX_PWM)
             if math.sqrt((x-px)**2 + (y-py)**2) < 25:
                 self.drag_idx = i; self.queue_draw(); return
 
@@ -141,11 +143,11 @@ class FanCurveWidget(Gtk.DrawingArea):
         if not ok: return
         raw = self.MAX_PWM - ((sy + dy - mt) * self.MAX_PWM / h)
         ns = self.snap(max(0, min(self.MAX_PWM, int(raw))))
-        self.points[self.drag_idx][2] = ns
+        self.points[self.drag_idx][3] = ns
         for j in range(self.drag_idx + 1, N):
-            if self.points[j][2] < ns: self.points[j][2] = ns
+            if self.points[j][3] < ns: self.points[j][3] = ns
         for j in range(self.drag_idx - 1, -1, -1):
-            if self.points[j][2] > ns: self.points[j][2] = ns
+            if self.points[j][3] > ns: self.points[j][3] = ns
         self.queue_draw()
 
     def on_drag_end(self, g, dx, dy): self.drag_idx = -1; self.queue_draw()
@@ -157,7 +159,7 @@ class FanCurveWidget(Gtk.DrawingArea):
         found = -1
         for i, p in enumerate(self.points):
             px = 80 + (i * w / (N - 1))
-            py = 20 + h - (p[2] * h / self.MAX_PWM)
+            py = 20 + h - (p[3] * h / self.MAX_PWM)
             if math.sqrt((x-px)**2 + (y-py)**2) < 25:
                 found = i; break
         if found != self.hover_idx:
@@ -366,10 +368,8 @@ class CustomSettingsWindow(Adw.Window):
                 N = len(self.graph.points)
                 for i in range(N):
                     pt = i + 1
-                    cpu_temp = int(open(os.path.join(hwmon, f"pwm1_auto_point{pt}_temp")).read())
-                    gpu_temp = int(open(os.path.join(hwmon, f"pwm2_auto_point{pt}_temp")).read())
                     pwm = int(open(os.path.join(hwmon, f"pwm1_auto_point{pt}_pwm")).read())
-                    self.graph.points[i] = [cpu_temp, gpu_temp, pwm]
+                    self.graph.points[i][3] = pwm
                 self.graph.queue_draw()
         except: pass
 
@@ -595,10 +595,11 @@ class CustomSettingsWindow(Adw.Window):
         if hwmon and hasattr(self, 'graph'):
             for i, p in enumerate(self.graph.points):
                 pt = i + 1
-                cmds.append(f"echo {p[2]} > {hwmon}/pwm1_auto_point{pt}_pwm")
-                cmds.append(f"echo {p[2]} > {hwmon}/pwm2_auto_point{pt}_pwm")
+                cmds.append(f"echo {p[3]} > {hwmon}/pwm1_auto_point{pt}_pwm")
+                cmds.append(f"echo {p[3]} > {hwmon}/pwm2_auto_point{pt}_pwm")
                 cmds.append(f"echo {p[0]} > {hwmon}/pwm1_auto_point{pt}_temp")
                 cmds.append(f"echo {p[1]} > {hwmon}/pwm2_auto_point{pt}_temp")
+                cmds.append(f"echo {p[2]} > {hwmon}/pwm3_auto_point{pt}_temp")
 
         # Build command chain: TCC/RAPL first (must succeed), EC sysfs + fan curve second
         critical = [tcc_cmd] + rapl_cmds + cmds
