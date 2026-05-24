@@ -156,12 +156,14 @@ class FanCurveWidget(Gtk.DrawingArea):
         if not ok: return
         y_from_bottom = h - (sy + dy - mt)
         ns = self.vis_to_snap(y_from_bottom, h)
-        # Enforce monotonicity: clamp to neighbours, don't cascade-reset others
-        if self.drag_idx > 0:
-            ns = max(ns, self.points[self.drag_idx - 1][3])
-        if self.drag_idx < N - 1:
-            ns = min(ns, self.points[self.drag_idx + 1][3])
+        # Push neighbours: drag up → push right neighbours up; drag down → push left neighbours down
         self.points[self.drag_idx][3] = ns
+        for j in range(self.drag_idx + 1, N):
+            if self.points[j][3] < ns: self.points[j][3] = ns
+            else: break  # stop at first point already above ns
+        for j in range(self.drag_idx - 1, -1, -1):
+            if self.points[j][3] > ns: self.points[j][3] = ns
+            else: break  # stop at first point already below ns
         self.queue_draw()
 
     def on_drag_end(self, g, dx, dy): self.drag_idx = -1; self.queue_draw()
