@@ -30,8 +30,20 @@ This project brings hardware-level tuning and custom power/thermal management sp
 - **Total Processor Power Target In AC** — 10W–70W. GPU→CPU dynamic power adjustment threshold. WMI Other Method writes succeed and read back correctly. EC firmware manages enforcement internally.
 - **GPU Temperature Limit** — 75°C–87°C. WMI Other Method writes succeed and read back correctly. EC firmware manages enforcement internally.
 
-### ❌ Disabled (Hardware Limitation)
-- **Fan Curve** — Disabled in the GUI. The EC commit register (0xCFB6 bit 4) does NOT copy staging→active on the LOQ 15IAX9. Windows writes to the SAME staging addresses and the commit mechanism used by Vantage remains undiscovered. The WMI fan method GUID (`92549549`) is also NOT available on this model.
+### ❌ Fan Curve — Not Feasible on LOQ 15IAX9
+
+The EC has two fan curve register regions:
+- **Staging area** (0xCF00+, stride 6) — writes succeed and read back correctly
+- **Active area** (0xC507+, stride 3) — not CPU-accessible, always returns 0xFF
+
+Every known commit mechanism fails on this model:
+- **0xCFB6 bit 4** → EC ignores it (register already reads 0xFF)
+- **WMI Fan_Set_Table (GUID 92549549, method 6)** → GUID is registered but the method is a no-op on LOQ firmware
+- **LenovoLegionToolkit** (Windows OSS alternative) uses the same WMI method — works on Legion 5/7 (2022+) but NOT on LOQ models
+
+Windows Vantage works because it ships a proprietary kernel driver that talks to the EC firmware directly, not through WMI. Without that driver (or its protocol), fan curve control is not possible on this model.
+
+The max fan speed toggle (WMI Other Method, GUID DC2A8805) is the only functional fan feature.
 
 ### ✅ Working (Non-Custom-Mode)
 - **Power Mode Switching** — Quiet, Balanced, Performance, Custom. WMI-based. Fn+Q hotkeys continue to work independently.
@@ -48,8 +60,8 @@ This project brings hardware-level tuning and custom power/thermal management sp
 
 ## ⚠️ Known Limitations
 
-**Fan Curve (UNRESOLVED):**
-The EC has two separate register regions for the fan curve — a staging area (0xCF00+) where writes land, and an active area (0xC507+) the EC firmware uses for fan control. The commit mechanism at 0xCFB6 bit 4 does NOT properly copy staging→active on the LOQ 15IAX9. The WMI fan method GUID is also not available. The fan curve widget is commented out in the GUI until the EC commit mechanism is discovered.
+**Fan Curve (NOT FEASIBLE):**
+The EC on the LOQ 15IAX9 (NECN) does not support fan curve control through any discoverable mechanism. See Feature Status above for details.
 
 **Cross Loading, Total AC, GPU Temp Limit (UNVERIFIABLE):**
 These three settings are EC-firmware-managed policies. The WMI/EC writes succeed and the values persist correctly, but the enforcement cannot be observed or stress-tested from Linux userspace. The EC firmware applies them internally.
