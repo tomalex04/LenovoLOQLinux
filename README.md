@@ -17,18 +17,18 @@ This project brings hardware-level tuning and custom power/thermal management sp
 ## :rocket: Features
 
 ### ✅ Stress-Tested & Enforced (Verified Working)
-- **Long Term Power Limit (PL1)** — 50W–95W. Set natively via Lenovo WMI ACPI methods (matches Vantage behavior exactly).
-- **Short Term Power Limit (PL2)** — 60W–167W. Set natively via Lenovo WMI ACPI methods.
-- **Short Term Power Limit Duration (Tau)** — 20s–160s. Set natively via Lenovo WMI ACPI methods.
-- **CPU Temperature Limit** — 85°C–100°C. Set natively via Lenovo WMI ACPI methods.
-- **Dynamic Boost (PPAB)** — 5W/10W/15W. Enforced by EC firmware. Verified dGPU power = cTGP + PPAB under CUDA load.
-- **Configurable TGP (cTGP)** — 60W/65W/70W/75W/80W. Enforced by EC firmware. Verified across all values.
-- **GPU to CPU Dynamic Boost** — 0W/5W/10W/15W. Shifts power limit to the CPU based on CPU usage. Enforced by EC firmware and verified via PyTorch CUDA/CPU stress testing.
+- **Long Term Power Limit (PL1)** — 50W–95W. Set natively via Lenovo WMI ACPI methods. Enforced by EC firmware out-of-band (bypassing Linux RAPL). Verified via `stress-ng`.
+- **Short Term Power Limit (PL2)** — 60W–167W. Set and enforced natively.
+- **Short Term Power Limit Duration (Tau)** — 20s–160s. Verified working via stress tests.
+- **CPU Temperature Limit** — 85°C–100°C. Enforced natively. WMI writes automatically program the underlying Intel TCC Offset registers (e.g. 85°C writes TCC Offset 15).
+- **Dynamic Boost (PPAB)** — 5W/10W/15W. Enforced natively. Verified GPU power hits exact `cTGP + PPAB` ceiling under combined PyTorch CUDA + CPU load.
+- **Configurable TGP (cTGP)** — 60W/65W/70W/75W/80W. Enforced natively by EC firmware.
+- **GPU to CPU Dynamic Boost** — 0W/5W/10W/15W. Shifts power limit to the CPU based on CPU usage. WMI values mapped internally.
 
-### ⚠️ WMI-Verified (EC Firmware Managed — Cannot Stress-Test from Linux)
-- **Long Term Power Limit (Cross Loading)** — 25W–55W. CPU limit when GPU is active. WMI Other Method writes succeed and read back correctly. EC firmware manages enforcement internally.
-- **Total Processor Power Target In AC** — 10W–70W. GPU→CPU dynamic power adjustment threshold. WMI Other Method writes succeed and read back correctly. EC firmware manages enforcement internally.
-- **GPU Temperature Limit** — 75°C–87°C. WMI Other Method writes succeed and read back correctly. EC firmware manages enforcement internally.
+### ⚠️ WMI-Verified (Requires Windows Services for Enforcement)
+- **Long Term Power Limit (Cross Loading)** — 25W–55W. CPU limit when GPU is active. WMI writes succeed perfectly and save to EC memory, but Lenovo's EC firmware ignores the limit unless proprietary Lenovo Vantage Windows background services are actively running.
+- **Total Processor Power Target In AC** — 10W–70W. GPU→CPU dynamic power adjustment threshold. Same limitation as Cross Loading.
+- **GPU Temperature Limit** — 75°C–87°C. WMI writes succeed with accurate UI mapping (+1 offset), but hardware enforcement requires Windows Vantage services.
 
 ### ✅ Fan Curve — Working on LOQ 15IAX9
 
@@ -64,8 +64,8 @@ Writes to EC staging registers (0xCF00+, stride 6) via hwmon sysfs. The EC commi
 **Fan Curve:**
 Working via EC staging writes + 0xCFB6 bit 4 commit. Effective PWM range 40–128 (1700–5000 RPM). 10 snap points with monotonic enforcement. PWM values above 128 produce no additional RPM.
 
-**Cross Loading, Total AC, GPU Temp Limit (UNVERIFIABLE):**
-These three settings are EC-firmware-managed policies. The WMI/EC writes succeed and the values persist correctly, but the enforcement cannot be observed or stress-tested from Linux userspace. The EC firmware applies them internally.
+**Cross Loading, Total AC, GPU Temp Limit (Unenforced on Linux):**
+These three settings are Windows-managed policies. The WMI/EC writes succeed and the values persist correctly to the hardware memory, but the actual enforcement of these thresholds requires the proprietary Lenovo Vantage services running in the background. They will not clamp power on Linux.
 
 **Single-Model Support:**
 The kernel module has been stripped to support ONLY the LOQ 15IAX9 (NECN BIOS). All other laptop model configurations have been removed.
