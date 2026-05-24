@@ -70,28 +70,30 @@ The kernel module has been stripped to support ONLY the LOQ 15IAX9 (NECN BIOS). 
 
 ## :gear: Prerequisites
 
+> **Note:** The `install.sh` script automatically installs all prerequisites for Ubuntu/Debian, Fedora/RHEL, and Arch/Manjaro. You only need to install these manually if you are not using the automated installer.
+
 ### Ubuntu 24.04 / Debian / Pop!_OS / Mint
 ```bash
 sudo apt-get update
 sudo apt-get install -y \
-    make gcc linux-headers-$(uname -r) build-essential git lm-sensors \
+    make gcc linux-headers-$(uname -r) build-essential git lm-sensors dkms \
     python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1 \
-    python3-pip python3-pil python3-yaml python3-pillow
+    python3-pil python3-yaml python3-pillow
 ```
 
 ### Fedora / RHEL
 ```bash
 sudo dnf install -y \
-    kernel-headers kernel-devel dmidecode lm_sensors gcc make \
-    gtk4 libadwaita python3-gobject python3-pillow python3-yaml python3-pip
+    kernel-headers kernel-devel dmidecode lm_sensors gcc make dkms \
+    gtk4 libadwaita python3-gobject python3-pillow python3-yaml
 sudo dnf groupinstall "Development Tools"
 ```
 
 ### Arch / Manjaro
 ```bash
 sudo pacman -S \
-    linux-headers base-devel lm_sensors gtk4 libadwaita \
-    python-gobject python-pillow python-yaml python-pip
+    linux-headers base-devel lm_sensors gtk4 libadwaita dkms \
+    python-gobject python-pillow python-yaml
 ```
 
 ## :hammer_and_wrench: Installation & Setup
@@ -109,19 +111,19 @@ cd LenovoLOQLinux
 sudo ./install.sh
 ```
 
-This script will automatically:
-- Install all necessary package dependencies (`gcc`, `make`, `dkms`, `python3-gi`, etc.) for your specific distro (Ubuntu, Fedora, or Arch).
-- Compile and install the `legion-laptop` kernel module permanently via DKMS. It will **not** remove or interfere with any other drivers already on your system.
-- Install and enable the `legiond.service` background daemon.
-- Install the GUI globally into `/opt/LenovoLOQLinux` and add a "Lenovo LOQ Control" shortcut to your application menu with the official logo.
+This will automatically:
+- Install all necessary package dependencies for your distro (Ubuntu/Debian, Fedora/RHEL, or Arch/Manjaro).
+- Build and install the `legion-laptop` kernel module **permanently via DKMS** — it will survive reboots and kernel updates. No other drivers are affected.
+- Install and enable the `legiond.service` background daemon that auto-applies your Custom profile on mode switches.
+- Install the GUI into `/opt/LenovoLOQLinux` and register a **"Lenovo LOQ Control"** shortcut in your application menu.
 
-When applying hardware settings from the GUI, you will be prompted for your **sudo password** via a standard system dialog (`pkexec`). This is by design — hardware writes require elevated privileges.
+> **Password prompt:** When you apply settings from the GUI, your system will ask for your **sudo password** via a standard `pkexec` dialog. This is intentional — hardware writes require elevated privileges.
 
-If you ever wish to remove the driver and application, simply run:
+To uninstall everything cleanly:
 ```bash
 sudo ./uninstall.sh
 ```
-*(Note: The uninstaller only removes the `legion-laptop` module, its DKMS entry, the `legiond` daemon, and the GUI files. It will not touch any other drivers or system components.)*
+This removes **only** the `legion-laptop` kernel module, its DKMS entry, the `legiond` daemon, and the GUI files. No other drivers or system packages are touched.
 
 ## :desktop_computer: Usage
 
