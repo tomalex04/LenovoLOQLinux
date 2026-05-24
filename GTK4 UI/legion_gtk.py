@@ -54,6 +54,18 @@ class FanCurveWidget(Gtk.DrawingArea):
     def snap(self, pwm):
         return min(self.SNAP, key=lambda s: abs(s - pwm))
 
+    def pwm_to_vis(self, pwm, h):
+        """Map a PWM snap value to an evenly-spaced visual Y offset from bottom.
+        Each snap level gets equal vertical space regardless of actual PWM gap."""
+        idx = self.SNAP.index(pwm) if pwm in self.SNAP else 0
+        return idx * h / (len(self.SNAP) - 1)
+
+    def vis_to_snap(self, y_from_bottom, h):
+        """Reverse: given a visual Y offset from bottom, return the nearest snap PWM."""
+        idx = round(y_from_bottom * (len(self.SNAP) - 1) / h)
+        idx = max(0, min(len(self.SNAP) - 1, idx))
+        return self.SNAP[idx]
+
     def rpm_for_pwm(self, pwm):
         """Return measured RPM for a given PWM, or estimate linearly."""
         if pwm in self._RPM_MAP:
@@ -72,43 +84,44 @@ class FanCurveWidget(Gtk.DrawingArea):
         cr.set_source_rgb(0.12, 0.12, 0.12); cr.rectangle(ml, mt, w, h); cr.fill()
         cr.set_source_rgb(0.22, 0.22, 0.22); cr.set_line_width(1)
         for sv in self.SNAP:
-            y = mt + h - (sv * h / self.MAX_PWM); cr.move_to(ml, y); cr.line_to(ml + w, y)
+            y = mt + h - self.pwm_to_vis(sv, h); cr.move_to(ml, y); cr.line_to(ml + w, y)
         for i in range(N + 1):
             x = ml + (i * w / N); cr.move_to(x, mt); cr.line_to(x, mt + h)
         cr.stroke()
         cr.set_source_rgb(0.6, 0.6, 0.6); cr.set_font_size(12)
         cr.move_to(5, mt + h + 15); cr.show_text("Fan Speed")
-        for sv in [0, 32, 64, 96, 128]:
-            pct = sv * 100 // 128
-            cr.move_to(ml - 50, mt + h - (sv * h / self.MAX_PWM) + 5); cr.show_text(f"{pct}%")
+        for sv in self.SNAP:
+            rpm = self._RPM_MAP.get(sv, 0)
+            y = mt + h - self.pwm_to_vis(sv, h) + 5
+            cr.move_to(ml - 70, y); cr.show_text(f"{rpm}")
         cr.move_to(ml + w - 40, mt + h + 50); cr.show_text("100 °C")
         cr.set_source_rgb(0.35, 0.35, 0.35); cr.set_line_width(3)
         for i, p in enumerate(self.points):
-            x, y = ml + (i * w / (N - 1)), mt + h - (p[3] * h / self.MAX_PWM)
+            x, y = ml + (i * w / (N - 1)), mt + h - self.pwm_to_vis(p[3], h)
             if i == 0: cr.move_to(x, y)
             else: cr.line_to(x, y)
         cr.stroke()
         cr.set_source_rgba(0.35, 0.35, 0.35, 0.15)
         for i, p in enumerate(self.points):
-            x, y = ml + (i * w / (N - 1)), mt + h - (p[3] * h / self.MAX_PWM)
+            x, y = ml + (i * w / (N - 1)), mt + h - self.pwm_to_vis(p[3], h)
             if i == 0: cr.move_to(x, y)
             else: cr.line_to(x, y)
         cr.line_to(ml + ((N - 1) * w / (N - 1)), mt + h); cr.line_to(ml, mt + h); cr.close_path(); cr.fill()
         for i, p in enumerate(self.points):
-            x, y = ml + (i * w / (N - 1)), mt + h - (p[3] * h / self.MAX_PWM)
+            x, y = ml + (i * w / (N - 1)), mt + h - self.pwm_to_vis(p[3], h)
             cr.arc(x, y, 7, 0, 2 * math.pi)
             cr.set_source_rgb(1, 0.2, 0.2) if i == self.drag_idx else cr.set_source_rgb(0.2, 0.7, 1)
             cr.fill()
         cr.set_source_rgb(0.3, 0.3, 0.3); cr.set_line_width(1)
         for i, p in enumerate(self.points):
-            x, y = ml + (i * w / (N - 1)), mt + h - (p[3] * h / self.MAX_PWM)
+            x, y = ml + (i * w / (N - 1)), mt + h - self.pwm_to_vis(p[3], h)
             cr.move_to(x, y + 7); cr.line_to(x, mt + h)
         cr.stroke()
 
         if self.hover_idx >= 0:
             p = self.points[self.hover_idx]
             px = ml + (self.hover_idx * w / (N - 1))
-            py = mt + h - (p[3] * h / self.MAX_PWM)
+            py = mt + h - self.pwm_to_vis(p[3], h)
             rpm = self.rpm_for_pwm(p[3])
             msg = f"P{self.hover_idx+1}: CPU={p[0]}°C Sensor={p[1]}°C GPU={p[2]}°C\nPWM={p[3]} ({rpm}RPM)"
             lines = msg.split("\n")
@@ -130,7 +143,7 @@ class FanCurveWidget(Gtk.DrawingArea):
         ml, mt = 80, 20
         w, h = self.get_width() - ml - 20, self.get_height() - mt - 70
         for i, p in enumerate(self.points):
-            px, py = ml + (i * w / (N - 1)), mt + h - (p[3] * h / self.MAX_PWM)
+            px, py = ml + (i * w / (N - 1)), mt + h - self.pwm_to_vis(p[3], h)
             if math.sqrt((x-px)**2 + (y-py)**2) < 25:
                 self.drag_idx = i; self.queue_draw(); return
 
@@ -141,8 +154,8 @@ class FanCurveWidget(Gtk.DrawingArea):
         w, h = self.get_width() - ml - 20, self.get_height() - mt - 70
         ok, sx, sy = g.get_start_point()
         if not ok: return
-        raw = self.MAX_PWM - ((sy + dy - mt) * self.MAX_PWM / h)
-        ns = self.snap(max(0, min(self.MAX_PWM, int(raw))))
+        y_from_bottom = h - (sy + dy - mt)
+        ns = self.vis_to_snap(y_from_bottom, h)
         self.points[self.drag_idx][3] = ns
         for j in range(self.drag_idx + 1, N):
             if self.points[j][3] < ns: self.points[j][3] = ns
@@ -159,7 +172,7 @@ class FanCurveWidget(Gtk.DrawingArea):
         found = -1
         for i, p in enumerate(self.points):
             px = 80 + (i * w / (N - 1))
-            py = 20 + h - (p[3] * h / self.MAX_PWM)
+            py = 20 + h - self.pwm_to_vis(p[3], h)
             if math.sqrt((x-px)**2 + (y-py)**2) < 25:
                 found = i; break
         if found != self.hover_idx:
