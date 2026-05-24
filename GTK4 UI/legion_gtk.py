@@ -27,12 +27,12 @@ def hw_write(cmd_str):
 # ===================================================================
 
 class FanCurveWidget(Gtk.DrawingArea):
-    SNAP = [round(i * 255 / 9) for i in range(10)]
-    MAX_PWM = 255
+    SNAP = [round(i * 128 / 9) for i in range(10)]
+    MAX_PWM = 128
     DEFAULTS = [
-        [60, 42, 122], [64, 48, 133], [68, 54, 143], [72, 60, 153],
-        [76, 66, 163], [80, 72, 173], [84, 80, 184], [88, 88, 194],
-        [93, 94, 207], [98, 99, 219]
+        [60, 42, 0], [64, 48, 28], [68, 54, 43], [72, 60, 57],
+        [76, 66, 71], [80, 72, 85], [84, 80, 100], [88, 88, 114],
+        [93, 94, 128], [98, 99, 128]
     ]
 
     def __init__(self):
@@ -59,8 +59,8 @@ class FanCurveWidget(Gtk.DrawingArea):
         cr.stroke()
         cr.set_source_rgb(0.6, 0.6, 0.6); cr.set_font_size(12)
         cr.move_to(5, mt + h + 15); cr.show_text("Fan Speed")
-        for sv in [0, 64, 128, 192, 255]:
-            pct = sv * 100 // 255
+        for sv in [0, 32, 64, 96, 128]:
+            pct = sv * 100 // 128
             cr.move_to(ml - 50, mt + h - (sv * h / self.MAX_PWM) + 5); cr.show_text(f"{pct}%")
         cr.move_to(ml + w - 40, mt + h + 50); cr.show_text("100 °C")
         cr.set_source_rgb(0.35, 0.35, 0.35); cr.set_line_width(3)
