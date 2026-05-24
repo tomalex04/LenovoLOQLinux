@@ -29,11 +29,11 @@ def hw_write(cmd_str):
 class FanCurveWidget(Gtk.DrawingArea):
     # Snap points spaced across effective PWM range (40-128),
     # each producing a distinct RPM: 1700→5000
-    SNAP = [40, 48, 57, 64, 71, 85, 93, 100, 114, 128]
+    SNAP = [round(i * 128 / 9) for i in range(10)]
     MAX_PWM = 128
     DEFAULTS = [
-        [60, 42, 40], [64, 48, 48], [68, 54, 57], [72, 60, 64],
-        [76, 66, 71], [80, 72, 85], [84, 80, 93], [88, 88, 100],
+        [60, 42, 0], [64, 48, 14], [68, 54, 28], [72, 60, 43],
+        [76, 66, 57], [80, 72, 71], [84, 80, 85], [88, 88, 100],
         [93, 94, 114], [98, 99, 128]
     ]
 
