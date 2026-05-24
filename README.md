@@ -26,16 +26,12 @@ This project brings hardware-level tuning and custom power/thermal management sp
 - **Maximum Fan Speed Toggle** — Extreme cooling/dust cleaning. Uses WMI Other Method (same as Vantage). Works in custom power mode only.
 
 ### ⚠️ WMI-Verified (EC Firmware Managed — Cannot Stress-Test from Linux)
-- **Long Term Power Limit (Cross Loading)** — 25W–55W. CPU limit when GPU is active. EC firmware manages enforcement internally. WMI writes succeed and read back correctly.
-- **Total Processor Power Target In AC** — 10W–70W. GPU→CPU dynamic power adjustment threshold. EC firmware manages enforcement internally. WMI writes succeed and read back correctly.
-- **GPU Temperature Limit** — 75°C–87°C. EC firmware manages enforcement internally. WMI writes succeed and read back correctly.
+- **Long Term Power Limit (Cross Loading)** — 25W–55W. CPU limit when GPU is active. WMI Other Method writes succeed and read back correctly. EC firmware manages enforcement internally.
+- **Total Processor Power Target In AC** — 10W–70W. GPU→CPU dynamic power adjustment threshold. WMI Other Method writes succeed and read back correctly. EC firmware manages enforcement internally.
+- **GPU Temperature Limit** — 75°C–87°C. WMI Other Method writes succeed and read back correctly. EC firmware manages enforcement internally.
 
-### ⚠️ Fan Curve — Partially Working (Hardware Limitation)
-- **10-point custom fan curve editor** — Interactive Cairo graph with drag points, monotonically enforced, snap to increments of 5.
-- Writes land in the EC staging area (0xCF00+, stride 6).
-- **The EC commit register (0xCFB6 bit 4) does NOT work on the LOQ 15IAX9** — staging data is never copied to the active registers.
-- The WMI fan method (GUID `92549549`) is also NOT available on this model.
-- **Workaround:** Staging writes empirically influence fan behavior, but the mechanism is not fully understood. The GUI reads the fan curve from saved profile data, not from hardware read-back (which returns corrupted mixed data).
+### ❌ Disabled (Hardware Limitation)
+- **Fan Curve** — Disabled in the GUI. The EC commit register (0xCFB6 bit 4) does NOT copy staging→active on the LOQ 15IAX9. Windows writes to the SAME staging addresses and the commit mechanism used by Vantage remains undiscovered. The WMI fan method GUID (`92549549`) is also NOT available on this model.
 
 ### ✅ Working (Non-Custom-Mode)
 - **Power Mode Switching** — Quiet, Balanced, Performance, Custom. WMI-based. Fn+Q hotkeys continue to work independently.
@@ -43,16 +39,20 @@ This project brings hardware-level tuning and custom power/thermal management sp
 - **Rapid Charging Mode** — Fast charging toggle (mutually exclusive with Conservation Mode).
 - **Real-time Monitoring** — CPU/GPU temperatures, fan RPM.
 
+### ✅ Preset System
+- **Create Presets** — Save current settings as a named preset via +New button.
+- **Rename Presets** — Edit preset names via the edit icon.
+- **Delete Presets** — Remove presets via the trash icon.
+- **Switch Presets** — Load any saved preset from the dropdown. Unsaved changes are discarded on switch.
+- **Persist on Save** — Changes are saved to the active preset only when you click "Save" or "Save & Close". Switching presets without saving discards unsaved changes.
+
 ## ⚠️ Known Limitations
 
 **Fan Curve (UNRESOLVED):**
-The EC has two separate register regions for the fan curve — a staging area (0xCF00+) where writes land, and an active area (0xC507+) the EC firmware uses for fan control. The commit mechanism at 0xCFB6 bit 4 does NOT properly copy staging→active on the LOQ 15IAX9. The WMI fan method GUID is also not available. This is the biggest remaining issue in the project.
+The EC has two separate register regions for the fan curve — a staging area (0xCF00+) where writes land, and an active area (0xC507+) the EC firmware uses for fan control. The commit mechanism at 0xCFB6 bit 4 does NOT properly copy staging→active on the LOQ 15IAX9. The WMI fan method GUID is also not available. The fan curve widget is commented out in the GUI until the EC commit mechanism is discovered.
 
 **Cross Loading, Total AC, GPU Temp Limit (UNVERIFIABLE):**
 These three settings are EC-firmware-managed policies. The WMI/EC writes succeed and the values persist correctly, but the enforcement cannot be observed or stress-tested from Linux userspace. The EC firmware applies them internally.
-
-**Preset Profiles:**
-The preset dropdowns (max/min) in the Custom Mode window are placeholders. Only manual slider adjustment is supported.
 
 **Single-Model Support:**
 The kernel module has been stripped to support ONLY the LOQ 15IAX9 (NECN BIOS). All other laptop model configurations have been removed.
