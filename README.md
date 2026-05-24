@@ -23,27 +23,27 @@ This project brings hardware-level tuning and custom power/thermal management sp
 - **CPU Temperature Limit** — 85°C–100°C. Enforced via Intel TCC Offset (hardware thermal throttling, same as Windows Vantage).
 - **Dynamic Boost (PPAB)** — 5W/10W/15W. Enforced by EC firmware. Verified dGPU power = cTGP + PPAB under CUDA load.
 - **Configurable TGP (cTGP)** — 60W/65W/70W/75W/80W. Enforced by EC firmware. Verified across all values.
-- **Maximum Fan Speed Toggle** — Extreme cooling/dust cleaning. Uses WMI Other Method (same as Vantage). Works in custom power mode only.
 
 ### ⚠️ WMI-Verified (EC Firmware Managed — Cannot Stress-Test from Linux)
 - **Long Term Power Limit (Cross Loading)** — 25W–55W. CPU limit when GPU is active. WMI Other Method writes succeed and read back correctly. EC firmware manages enforcement internally.
 - **Total Processor Power Target In AC** — 10W–70W. GPU→CPU dynamic power adjustment threshold. WMI Other Method writes succeed and read back correctly. EC firmware manages enforcement internally.
 - **GPU Temperature Limit** — 75°C–87°C. WMI Other Method writes succeed and read back correctly. EC firmware manages enforcement internally.
 
-### ❌ Fan Curve — Not Feasible on LOQ 15IAX9
+### ✅ Fan Curve — Working on LOQ 15IAX9
 
-The EC has two fan curve register regions:
-- **Staging area** (0xCF00+, stride 6) — writes succeed and read back correctly
-- **Active area** (0xC507+, stride 3) — not CPU-accessible, always returns 0xFF
+Writes to EC staging registers (0xCF00+, stride 6) via hwmon sysfs. The EC commit at `0xCFB6` bit 4 copies staging→active. PWM range is 0–255, but EC firmware caps at effective PWM 40 (1700 RPM minimum) and PWM 128 (5000 RPM maximum). Values above 128 produce no additional RPM.
 
-Every known commit mechanism fails on this model:
-- **0xCFB6 bit 4** → EC ignores it (register already reads 0xFF)
-- **WMI Fan_Set_Table (GUID 92549549, method 6)** → GUID is registered but the method is a no-op on LOQ firmware
-- **LenovoLegionToolkit** (Windows OSS alternative) uses the same WMI method — works on Legion 5/7 (2022+) but NOT on LOQ models
+- **10-point interactive Cairo graph** with drag points
+- **10 snap values** spanning PWM 40–128, each producing a distinct RPM step:
+  - PWM 40 → 1700 RPM, 48 → 1900, 57 → 2300, 64 → 2600, 71 → 2800
+  - PWM 85 → 3400, 93 → 3700, 100 → 4000, 114 → 4500, 128 → 5000
+- Monotonically enforced (points can't drop below previous)
+- X-axis: CPU temp trigger per point (°C)
+- Y-axis: fan speed in PWM (0–128)
+- First point at PWM 40 (EC minimum ~1700 RPM)
+- Saved/restored with presets
 
-Windows Vantage works because it ships a proprietary kernel driver that talks to the EC firmware directly, not through WMI. Without that driver (or its protocol), fan curve control is not possible on this model.
-
-The max fan speed toggle (WMI Other Method, GUID DC2A8805) is the only functional fan feature.
+### ✅ Maximum Fan Speed Toggle
 
 ### ✅ Working (Non-Custom-Mode)
 - **Power Mode Switching** — Quiet, Balanced, Performance, Custom. WMI-based. Fn+Q hotkeys continue to work independently.
@@ -60,8 +60,8 @@ The max fan speed toggle (WMI Other Method, GUID DC2A8805) is the only functiona
 
 ## ⚠️ Known Limitations
 
-**Fan Curve (NOT FEASIBLE):**
-The EC on the LOQ 15IAX9 (NECN) does not support fan curve control through any discoverable mechanism. See Feature Status above for details.
+**Fan Curve:**
+Working via EC staging writes + 0xCFB6 bit 4 commit. Effective PWM range 40–128 (1700–5000 RPM). 10 snap points with monotonic enforcement. PWM values above 128 produce no additional RPM.
 
 **Cross Loading, Total AC, GPU Temp Limit (UNVERIFIABLE):**
 These three settings are EC-firmware-managed policies. The WMI/EC writes succeed and the values persist correctly, but the enforcement cannot be observed or stress-tested from Linux userspace. The EC firmware applies them internally.
