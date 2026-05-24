@@ -373,7 +373,7 @@ class CustomSettingsWindow(Adw.Window):
         dialog.set_close_response("cancel")
         entry = Gtk.Entry(placeholder_text="Preset name", hexpand=True, margin_top=10, margin_bottom=10, margin_start=20, margin_end=20)
         entry.set_text(f"Preset {len(self.profiles) + 1}")
-        dialog.get_content_area().append(entry)
+        dialog.set_extra_child(entry)
         dialog.connect("response", lambda d, resp: self._add_preset(entry.get_text()) if resp == "save" else None)
         dialog.present()
 
@@ -399,7 +399,7 @@ class CustomSettingsWindow(Adw.Window):
         dialog.set_close_response("cancel")
         entry = Gtk.Entry(placeholder_text="New name", hexpand=True, margin_top=10, margin_bottom=10, margin_start=20, margin_end=20)
         entry.set_text(old_name)
-        dialog.get_content_area().append(entry)
+        dialog.set_extra_child(entry)
         dialog.connect("response", lambda d, resp: self._rename_preset(old_name, entry.get_text()) if resp == "rename" else None)
         dialog.present()
 
