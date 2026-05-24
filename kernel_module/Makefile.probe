@@ -1,0 +1,18 @@
+obj-m += wmi_probe.o
+
+KDIR ?= /lib/modules/$(shell uname -r)/build
+
+all:
+	$(MAKE) -C $(KDIR) M=$(PWD) modules
+
+clean:
+	$(MAKE) -C $(KDIR) M=$(PWD) clean
+
+# Build, insert, dump dmesg, then remove
+run: all
+	sudo rmmod wmi_probe 2>/dev/null || true
+	sudo insmod wmi_probe.ko
+	@echo ""
+	@echo "=== wmi_probe dmesg output ==="
+	sudo dmesg | grep "wmi_probe:" | tail -40
+	sudo rmmod wmi_probe

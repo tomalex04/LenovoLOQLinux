@@ -1965,8 +1965,18 @@ enum OtherMethodFeature {
 	OtherMethodFeature_GPU_POWER_BOOST = 0x02010000,
 	OtherMethodFeature_GPU_cTGP = 0x02020000,
 	OtherMethodFeature_GPU_TEMPERATURE_LIMIT = 0x02030000,
-	OtherMethodFeature_GPU_POWER_TARGET_ON_AC_OFFSET_FROM_BASELINE =
-		0x02040000,
+	/*
+	 * GPU→CPU Dynamic Boost ("GPU to CPU Dynamic Boost" in Lenovo Vantage).
+	 * CONFIRMED via wmi_probe.ko (2025-05-24): this is the only feature ID
+	 * that changed between Windows settings:
+	 *   Windows 10W → GetFeatureValue(0x02040000) = 45 (raw)
+	 *   Windows  0W → GetFeatureValue(0x02040000) = 0  (raw)
+	 * Note: raw value ≠ watts. Scaling: 0W=0, 10W=45 (factor ~4.5).
+	 * The store/show functions pass raw values; the GUI/Python layer
+	 * must use the confirmed valid raw values {0, ?, 45} or probe
+	 * 5W and 15W to complete the mapping.
+	 */
+	OtherMethodFeature_GPU_CPU_DYNAMIC_BOOST = 0x020B0000,
 
 	OtherMethodFeature_FAN_SPEED_1 = 0x04030001,
 	OtherMethodFeature_FAN_SPEED_2 = 0x04030002,
@@ -5139,6 +5149,53 @@ ec_sync:
 
 static DEVICE_ATTR_RW(gpu_temperature_limit);
 
+/*
+ * gpu_to_cpu_dynamic_boost — GPU→CPU reverse power shifting.
+ * Corresponds to "GPU to CPU Dynamic Boost" in Lenovo Vantage.
+ *
+ * Feature ID confirmed: OtherMethodFeature_GPU_CPU_DYNAMIC_BOOST = 0x02040000
+ * (wmi_probe.ko comparison: 0W→raw 0, 10W→raw 45).
+ *
+ * The raw WMI values do NOT equal watts. The sysfs interface exposes
+ * raw values; accepted values are {0, and whatever 5W/15W map to}.
+ * TODO: Probe 5W and 15W raw values to complete the map, then add
+ * proper watt↔raw translation in show/store if needed.
+ */
+static ssize_t gpu_to_cpu_dynamic_boost_show(struct device *dev,
+					     struct device_attribute *attr,
+					     char *buf)
+{
+	int val;
+	if (!wmi_other_method_get_value(
+			OtherMethodFeature_GPU_CPU_DYNAMIC_BOOST, &val))
+		return sysfs_emit(buf, "%d\n", val);
+	return -EOPNOTSUPP;
+}
+
+static ssize_t gpu_to_cpu_dynamic_boost_store(struct device *dev,
+					      struct device_attribute *attr,
+					      const char *buf, size_t count)
+{
+	int val, ret, wmi_out;
+
+	ret = kstrtoint(buf, 0, &val);
+	if (ret)
+		return ret;
+	/*
+	 * Raw WMI values (raw ≠ watts; confirmed: 0W→0, 10W→45).
+	 * Accept any non-negative value ≤ 100 until full map is known.
+	 * The GUI/Python layer is responsible for sending correct raw values.
+	 */
+	if (val < 0 || val > 100)
+		return -EINVAL;
+	if (!wmi_other_method_set_value(
+			OtherMethodFeature_GPU_CPU_DYNAMIC_BOOST, val, &wmi_out))
+		return count;
+	return -EOPNOTSUPP;
+}
+
+static DEVICE_ATTR_RW(gpu_to_cpu_dynamic_boost);
+
 static ssize_t cpu_temperature_limit_show(struct device *dev,
 					  struct device_attribute *attr,
 					  char *buf)
@@ -5349,6 +5406,7 @@ static struct attribute *legion_sysfs_attributes[] = {
 	&dev_attr_gpu_ctgp2_powerlimit.attr,
 	&dev_attr_gpu_default_ppab_ctrgp_powerlimit.attr,
 	&dev_attr_gpu_temperature_limit.attr,
+	&dev_attr_gpu_to_cpu_dynamic_boost.attr,
 	&dev_attr_gpu_boost_clock.attr,
 	&dev_attr_fan_fullspeed.attr,
 	&dev_attr_fan_maxspeed.attr,

@@ -190,6 +190,11 @@ class CustomSettingsWindow(Adw.Window):
     def __init__(self, parent, model):
         super().__init__(transient_for=parent, modal=True, title="Custom Mode Settings", default_width=800, default_height=800)
         self.m = model; self.profiles = self.load_profiles(); self.current_profile_name = "Default"
+        try:
+            with open(os.path.join(CONFIG_DIR, "last_active.txt"), "r") as f:
+                saved_name = f.read().strip()
+                if saved_name in self.profiles: self.current_profile_name = saved_name
+        except Exception: pass
         box = Gtk.Box(orientation=1); self.set_content(box)
         header = Adw.HeaderBar(); box.append(header)
 
@@ -243,7 +248,9 @@ class CustomSettingsWindow(Adw.Window):
             "The maximum temperature that can be reached by the GPU before frequency and power is reduced.")
         self.total_ac = self.add_slider(gpu_group, "Total Processor Power Target In AC", 10, 70, " W",
             "The point at which the CPU triggers dynamic power consumption adjustment for the GPU.")
-        # GPU to CPU Dynamic Boost removed — no WMI/EC support on LOQ 15IAX9
+        self.gpu_to_cpu_boost = self.add_combo(gpu_group, "GPU to CPU Dynamic Boost",
+            ["0 W", "5 W", "10 W", "15 W"],
+            "This is the maximum additional power that can be allocated to the CPU from the GPU based on CPU usage. The higher the value, the better the performance of applications that use the CPU.")
 
         # === Fan Section ===
         fan_group = Adw.PreferencesGroup(title="Fans"); page.add(fan_group)
@@ -268,6 +275,8 @@ class CustomSettingsWindow(Adw.Window):
 
         self.on_read_hw()
         self.refresh_presets()
+        if self.current_profile_name in self.profiles:
+            self.sync_ui_from_profile(self.profiles[self.current_profile_name])
 
     def add_slider(self, group, title, low, up, unit="", subtitle=""):
         row = Adw.ActionRow(title=title)
@@ -303,7 +312,7 @@ class CustomSettingsWindow(Adw.Window):
         return {"Default": {
             "pl1": 65, "pl2": 80, "cross_load": 55, "peak": 20,
             "dyn_boost": 15, "ctgp": 80, "gpu_temp": 87,
-            "cpu_temp": 85
+            "cpu_temp": 85, "gpu_to_cpu_boost": 10
         }}
 
     def on_read_hw(self):
@@ -371,6 +380,12 @@ class CustomSettingsWindow(Adw.Window):
         except: pass
         try: self.max_fan.set_active(self.m.maximum_fanspeed.get())
         except: pass
+        # GPU to CPU Dynamic Boost dropdown: values 0, 5, 10, 15 → indices 0-3
+        try:
+            val = int(self.m.gpu_to_cpu_dynamic_boost.get())
+            gtc_items = [0, 5, 10, 15]
+            if val in gtc_items: self.gpu_to_cpu_boost.set_selected(gtc_items.index(val))
+        except: pass
         # Restore fan curve from hwmon
         try:
             hwmon = None
@@ -392,14 +407,18 @@ class CustomSettingsWindow(Adw.Window):
 
     def refresh_presets(self):
         """Rebuild the preset dropdown from profiles dict."""
-        names = sorted(self.profiles.keys())
-        model = Gtk.StringList.new(names)
-        self.preset_combo.set_model(model)
-        if self.current_profile_name in names:
-            self.preset_combo.set_selected(names.index(self.current_profile_name))
-        elif names:
-            self.preset_combo.set_selected(0)
-            self.current_profile_name = names[0]
+        self.preset_combo.handler_block_by_func(self.on_preset_changed)
+        try:
+            names = sorted(self.profiles.keys())
+            model = Gtk.StringList.new(names)
+            self.preset_combo.set_model(model)
+            if self.current_profile_name in names:
+                self.preset_combo.set_selected(names.index(self.current_profile_name))
+            elif names:
+                self.preset_combo.set_selected(0)
+                self.current_profile_name = names[0]
+        finally:
+            self.preset_combo.handler_unblock_by_func(self.on_preset_changed)
 
     def on_preset_changed(self, dropdown, param):
         """Load selected preset into the UI. Unsaved changes are discarded."""
@@ -409,7 +428,9 @@ class CustomSettingsWindow(Adw.Window):
         name = model.get_string(idx)
         if name not in self.profiles or name == self.current_profile_name: return
         self.current_profile_name = name
-        p = self.profiles[name]
+        self.sync_ui_from_profile(self.profiles[name])
+
+    def sync_ui_from_profile(self, p):
         self.pl1.set_value(p.get("pl1", 65))
         self.pl2.set_value(p.get("pl2", 80))
         self.cross_load.set_value(p.get("cross_load", 55))
@@ -427,6 +448,10 @@ class CustomSettingsWindow(Adw.Window):
         if ct in ctgp_items: self.ctgp.set_selected(ctgp_items.index(ct))
         self.gpu_temp.set_value(p.get("gpu_temp", 87))
         self.max_fan.set_active(p.get("max_fan", False))
+        # GPU to CPU Dynamic Boost
+        gtc_items = [0, 5, 10, 15]
+        gtc = p.get("gpu_to_cpu_boost", 10)
+        if gtc in gtc_items: self.gpu_to_cpu_boost.set_selected(gtc_items.index(gtc))
         fan = p.get("fan")
         if fan and len(fan) >= 2 and len(fan[0]) >= 4 and hasattr(self, 'graph'):
             self.graph.points = [list(pt) for pt in fan]
@@ -508,6 +533,7 @@ class CustomSettingsWindow(Adw.Window):
             "ctgp": [60,65,70,75,80][self.ctgp.get_selected()],
             "gpu_temp": int(self.gpu_temp.get_value()),
             "cpu_temp": int(self.cpu_temp.get_value()),
+            "gpu_to_cpu_boost": [0,5,10,15][self.gpu_to_cpu_boost.get_selected()],
             "fan": [list(p) for p in self.graph.points] if hasattr(self, 'graph') else []
         }
 
@@ -570,6 +596,9 @@ class CustomSettingsWindow(Adw.Window):
         # Configurable TGP
         add_cmd("gpu_ctgp_power_limit",
                 [60, 65, 70, 75, 80][self.ctgp.get_selected()])
+        # GPU to CPU Dynamic Boost
+        add_cmd("gpu_to_cpu_dynamic_boost",
+                [0, 5, 10, 15][self.gpu_to_cpu_boost.get_selected()])
         # Maximum fan speed
         add_cmd("maximum_fanspeed",
                 1 if self.max_fan.get_active() else 0)
@@ -618,7 +647,12 @@ class CustomSettingsWindow(Adw.Window):
         if critical:
             hw_write(" && ".join(critical))
 
-        if close: self.close()
+        if close:
+            try:
+                with open(os.path.join(CONFIG_DIR, "last_active.txt"), "w") as f:
+                    f.write(self.current_profile_name)
+            except Exception: pass
+            self.close()
 
 
 class LegionApp(Adw.Application):

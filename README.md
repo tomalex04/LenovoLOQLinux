@@ -23,6 +23,7 @@ This project brings hardware-level tuning and custom power/thermal management sp
 - **CPU Temperature Limit** — 85°C–100°C. Enforced via Intel TCC Offset (hardware thermal throttling, same as Windows Vantage).
 - **Dynamic Boost (PPAB)** — 5W/10W/15W. Enforced by EC firmware. Verified dGPU power = cTGP + PPAB under CUDA load.
 - **Configurable TGP (cTGP)** — 60W/65W/70W/75W/80W. Enforced by EC firmware. Verified across all values.
+- **GPU to CPU Dynamic Boost** — 0W/5W/10W/15W. Shifts power limit to the CPU based on CPU usage. Enforced by EC firmware and verified via PyTorch CUDA/CPU stress testing.
 
 ### ⚠️ WMI-Verified (EC Firmware Managed — Cannot Stress-Test from Linux)
 - **Long Term Power Limit (Cross Loading)** — 25W–55W. CPU limit when GPU is active. WMI Other Method writes succeed and read back correctly. EC firmware manages enforcement internally.
@@ -56,6 +57,7 @@ Writes to EC staging registers (0xCF00+, stride 6) via hwmon sysfs. The EC commi
 - **Delete Presets** — Remove presets via the trash icon.
 - **Switch Presets** — Load any saved preset from the dropdown. Unsaved changes are discarded on switch.
 - **Persist on Save** — Changes are saved to the active preset only when you click "Save" or "Save & Close". Switching presets without saving discards unsaved changes.
+- **Auto-Apply Daemon (legiond.service)** — A background system service that monitors power mode changes (Fn+Q or UI). When Custom mode is activated, it automatically reads your last "Saved & Closed" profile and reapplies all settings to the hardware.
 
 ## ⚠️ Known Limitations
 

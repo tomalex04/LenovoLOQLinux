@@ -1,0 +1,12 @@
+[Unit]
+Description=Lenovo Legion Auto-Apply Custom Profile Daemon
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/legion_daemon.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

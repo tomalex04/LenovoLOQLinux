@@ -632,6 +632,27 @@ class GPUPPABPowerLimit(IntFileFeature):
         super().__init__(os.path.join(LEGION_SYS_BASEPATH, "gpu_ppab_powerlimit"), 0, 200, 1)
 
 
+class GPUToCPUDynamicBoost(IntFileFeature):
+    """GPU to CPU Dynamic Boost — power shifted from GPU headroom to CPU.
+
+    Corresponds to 'GPU to CPU Dynamic Boost' in Lenovo Vantage.
+    Valid values: 0, 5, 10, 15 (Watts).
+    Backed by the gpu_to_cpu_dynamic_boost sysfs node which uses
+    LENOVO_OTHER_METHOD WMI (feature ID 0x02040000).
+    """
+    def __init__(self):
+        super().__init__(
+            os.path.join(LEGION_SYS_BASEPATH, "gpu_to_cpu_dynamic_boost"),
+            0, 15, 5
+        )
+
+    def set(self, value: int):
+        # Clamp to valid Vantage values
+        valid = [0, 5, 10, 15]
+        value = min(valid, key=lambda v: abs(v - value))
+        super().set(value)
+
+
 class GPUTemperatureLimit(IntFileFeature):
     def __init__(self):
         super().__init__(os.path.join(LEGION_SYS_BASEPATH, "gpu_temperature_limit"), 0, 120, 1)
@@ -1504,6 +1525,7 @@ class LegionModelFacade:
         self.gpu_boost_clock = GPUBoostClock()
         self.gpu_ctgp_power_limit = GPUCTGPPowerLimit()
         self.gpu_ppab_power_limit = GPUPPABPowerLimit()
+        self.gpu_to_cpu_dynamic_boost = GPUToCPUDynamicBoost()
         self.gpu_temperature_limit = GPUTemperatureLimit()
         self.cpu_temperature_limit = CPUTemperatureLimit()
         self.cpu_pl1_tau = CPUPL1Tau()
