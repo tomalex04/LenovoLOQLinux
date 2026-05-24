@@ -335,12 +335,12 @@ class CustomSettingsWindow(Adw.Window):
             self.current_profile_name = names[0]
 
     def on_preset_changed(self, dropdown, param):
-        """Load selected preset into the UI."""
+        """Load selected preset into the UI. Unsaved changes are discarded."""
         idx = dropdown.get_selected()
         model = dropdown.get_model()
         if idx == -1 or idx >= model.get_n_items(): return
         name = model.get_string(idx)
-        if name not in self.profiles: return
+        if name not in self.profiles or name == self.current_profile_name: return
         self.current_profile_name = name
         p = self.profiles[name]
         self.pl1.set_value(p.get("pl1", 65))
