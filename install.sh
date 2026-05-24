@@ -55,16 +55,6 @@ EOF
 
 chmod +x /usr/share/applications/lenovoloq.desktop
 chmod +x "/opt/LenovoLOQLinux/GTK4 UI/legion_gtk.py"
-chmod +x "/opt/LenovoLOQLinux/GTK4 UI/hw_writer.py"
-
-echo ""
-echo "============================================="
-echo " Configuring Passwordless GUI Application... "
-echo "============================================="
-# Create a sudoers drop-in file to allow passwordless execution of the secure hardware writer
-echo "%sudo ALL=(ALL:ALL) NOPASSWD: /usr/bin/python3 /opt/LenovoLOQLinux/GTK4\ UI/hw_writer.py *" > /etc/sudoers.d/lenovoloq_gui
-echo "%wheel ALL=(ALL:ALL) NOPASSWD: /usr/bin/python3 /opt/LenovoLOQLinux/GTK4\ UI/hw_writer.py *" >> /etc/sudoers.d/lenovoloq_gui
-chmod 0440 /etc/sudoers.d/lenovoloq_gui
 
 echo ""
 echo "============================================="

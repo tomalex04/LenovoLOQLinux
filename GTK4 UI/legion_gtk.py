@@ -12,11 +12,11 @@ CONFIG_DIR = os.path.expanduser("~/.config/legion_linux")
 PROFILES_FILE = os.path.join(CONFIG_DIR, "profiles.json")
 SYSFS_BASE = "/sys/bus/platform/devices/PNP0C09:00"
 
-def hw_write(json_str):
-    """Write to hardware sysfs nodes securely."""
-    print(f"HW_WRITE: {json_str}")
-    helper_path = os.path.join(os.path.dirname(__file__), "hw_writer.py")
-    cmd = ['sudo', '/usr/bin/python3', helper_path, json_str]
+def hw_write(cmd_str):
+    """Write to hardware sysfs nodes via pkexec for non-root users."""
+    print(f"HW_WRITE: {cmd_str}")
+    cmd = ['sh', '-c', cmd_str]
+    if os.getuid() != 0: cmd = ['pkexec'] + cmd
     subprocess.Popen(cmd, stdout=None, stderr=None)
 
 
@@ -537,12 +537,12 @@ class CustomSettingsWindow(Adw.Window):
         """Actually perform the hardware write after user confirmation."""
         tau_vals = [20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160]
 
-        # Build a JSON dictionary for secure hw_writer.py
-        cmds = {}
+        # Build a single compound command — one pkexec password prompt
+        cmds = []
         def add_cmd(attr_name, value):
             feat = getattr(self.m, attr_name, None)
             if feat and feat.exists():
-                cmds[feat.filename] = value
+                cmds.append(f"echo {value} > {feat.filename}")
 
         for slider, attr_name in [
             (self.pl1, "cpu_longterm_power_limit"),
@@ -584,14 +584,14 @@ class CustomSettingsWindow(Adw.Window):
         if hwmon and hasattr(self, 'graph'):
             for i, p in enumerate(self.graph.points):
                 pt = i + 1
-                cmds[f"{hwmon}/pwm1_auto_point{pt}_pwm"] = p[3]
-                cmds[f"{hwmon}/pwm2_auto_point{pt}_pwm"] = p[3]
-                cmds[f"{hwmon}/pwm1_auto_point{pt}_temp"] = p[0]
-                cmds[f"{hwmon}/pwm2_auto_point{pt}_temp"] = p[1]
-                cmds[f"{hwmon}/pwm3_auto_point{pt}_temp"] = p[2]
+                cmds.append(f"echo {p[3]} > {hwmon}/pwm1_auto_point{pt}_pwm")
+                cmds.append(f"echo {p[3]} > {hwmon}/pwm2_auto_point{pt}_pwm")
+                cmds.append(f"echo {p[0]} > {hwmon}/pwm1_auto_point{pt}_temp")
+                cmds.append(f"echo {p[1]} > {hwmon}/pwm2_auto_point{pt}_temp")
+                cmds.append(f"echo {p[2]} > {hwmon}/pwm3_auto_point{pt}_temp")
 
         if cmds:
-            hw_write(json.dumps(cmds))
+            hw_write(" && ".join(cmds))
 
         if close:
             try:

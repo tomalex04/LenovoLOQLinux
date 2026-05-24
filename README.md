@@ -111,16 +111,17 @@ sudo ./install.sh
 
 This script will automatically:
 - Install all necessary package dependencies (`gcc`, `make`, `dkms`, `python3-gi`, etc.) for your specific distro (Ubuntu, Fedora, or Arch).
-- Compile and install the `legion-laptop` kernel module permanently via DKMS.
+- Compile and install the `legion-laptop` kernel module permanently via DKMS. It will **not** remove or interfere with any other drivers already on your system.
 - Install and enable the `legiond.service` background daemon.
 - Install the GUI globally into `/opt/LenovoLOQLinux` and add a "Lenovo LOQ Control" shortcut to your application menu with the official logo.
-- Safely configure a custom `sudoers` rule so the GUI can apply hardware settings **without ever asking for your password**, while remaining 100% secure against unauthorized shell execution.
+
+When applying hardware settings from the GUI, you will be prompted for your **sudo password** via a standard system dialog (`pkexec`). This is by design — hardware writes require elevated privileges.
 
 If you ever wish to remove the driver and application, simply run:
 ```bash
 sudo ./uninstall.sh
 ```
-*(Note: The uninstaller securely targets only the `legion-laptop` module and its configurations. It will absolutely not touch or remove any pre-existing drivers or components on your system.)*
+*(Note: The uninstaller only removes the `legion-laptop` module, its DKMS entry, the `legiond` daemon, and the GUI files. It will not touch any other drivers or system components.)*
 
 ## :desktop_computer: Usage
 
