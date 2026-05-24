@@ -316,50 +316,19 @@ class CustomSettingsWindow(Adw.Window):
         }}
 
     def on_read_hw(self):
-        """Read hardware-enforced values: RAPL powercap for PL1/PL2/tau,
-        TCC Offset for CPU temp limit. Falls back to EC sysfs if unavailable."""
-        RAPL = "/sys/class/powercap/intel-rapl:0"
+        """Read hardware-enforced WMI sysfs values directly."""
         tau_vals = [20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160]
-        # PL1 from RAPL (actual CPU enforcement), fallback to EC sysfs
+        try: self.pl1.set_value(int(self.m.cpu_longterm_power_limit.get()))
+        except: pass
+        try: self.pl2.set_value(int(self.m.cpu_shortterm_power_limit.get()))
+        except: pass
         try:
-            uw = int(open(os.path.join(RAPL, "constraint_0_power_limit_uw")).read())
-            self.pl1.set_value(uw // 1000000)
-        except:
-            try: self.pl1.set_value(int(self.m.cpu_longterm_power_limit.get()))
-            except: pass
-        # PL2 from RAPL
-        try:
-            uw = int(open(os.path.join(RAPL, "constraint_1_power_limit_uw")).read())
-            self.pl2.set_value(uw // 1000000)
-        except:
-            try: self.pl2.set_value(int(self.m.cpu_shortterm_power_limit.get()))
-            except: pass
-        # Tau from RAPL time window
-        try:
-            us = int(open(os.path.join(RAPL, "constraint_0_time_window_us")).read())
-            tau_s = max(1, us // 1000000)
-            closest = min(tau_vals, key=lambda x: abs(x - tau_s))
-            self.pl2_duration.set_selected(tau_vals.index(closest))
-        except:
-            try:
-                tau_raw = int(self.m.cpu_pl1_tau.get())
-                if tau_raw in tau_vals:
-                    self.pl2_duration.set_selected(tau_vals.index(tau_raw))
-            except: pass
-        # CPU temp limit from TCC Offset (actual Intel thermal enforcement)
-        try:
-            tcc_path = None
-            for d in glob.glob("/sys/devices/virtual/thermal/cooling_device*"):
-                if open(os.path.join(d, "type")).read().strip() == "TCC Offset":
-                    tcc_path = os.path.join(d, "cur_state")
-                    break
-            if tcc_path:
-                offset = int(open(tcc_path).read())
-                self.cpu_temp.set_value(100 - offset)
-        except:
-            try: self.cpu_temp.set_value(int(self.m.cpu_temperature_limit.get()))
-            except: pass
-        
+            tau_raw = int(self.m.cpu_pl1_tau.get())
+            if tau_raw in tau_vals:
+                self.pl2_duration.set_selected(tau_vals.index(tau_raw))
+        except: pass
+        try: self.cpu_temp.set_value(int(self.m.cpu_temperature_limit.get()))
+        except: pass
         try: self.cross_load.set_value(int(self.m.cpu_cross_loading_power_limit.get()))
         except: pass
         try: self.total_ac.set_value(int(self.m.cpu_peak_power_limit.get()))
@@ -563,18 +532,6 @@ class CustomSettingsWindow(Adw.Window):
 
         # Build a single compound command — one pkexec password prompt
         cmds = []
-        # Map each slider/dropdown to its model attribute name
-        attrs = {
-            self.pl1: "cpu_longterm_power_limit",
-            self.pl2: "cpu_shortterm_power_limit",
-            self.cross_load: "cpu_cross_loading_power_limit",
-            self.cpu_temp: "cpu_temperature_limit",
-            self.total_ac: "cpu_peak_power_limit",
-            self.gpu_temp: "gpu_temperature_limit",
-            None: "gpu_ppab_power_limit",  # dyn_boost
-            None: "gpu_ctgp_power_limit",  # ctgp
-            None: "maximum_fanspeed",      # max_fan
-        }
         def add_cmd(attr_name, value):
             feat = getattr(self.m, attr_name, None)
             if feat and feat.exists():
@@ -603,27 +560,8 @@ class CustomSettingsWindow(Adw.Window):
         add_cmd("maximum_fanspeed",
                 1 if self.max_fan.get_active() else 0)
 
-        # Fan curve writes are handled below via hwmon
-
-        # PL1 Tau
+        # Fan curve writes
         add_cmd("cpu_pl1_tau", tau_vals[self.pl2_duration.get_selected()])
-
-        # TCC Offset — programs actual CPU temperature throttle point via Intel thermal
-        # offset = TJmax - desired_limit, GUI range 85-100°C → offset 15..0
-        cpu_temp_limit = int(self.cpu_temp.get_value())
-        tcc_offset = 100 - cpu_temp_limit
-        tcc_cmd = f"echo {tcc_offset} > $(grep -l 'TCC Offset' /sys/devices/virtual/thermal/cooling_device*/type | head -1 | sed 's/type/cur_state/')"
-
-        # RAPL powercap — programs actual CPU package power limits via Intel RAPL
-        pl1 = int(self.pl1.get_value())
-        pl2 = int(self.pl2.get_value())
-        tau = tau_vals[self.pl2_duration.get_selected()]
-        RAPL = "/sys/class/powercap/intel-rapl:0"
-        rapl_cmds = []
-        if os.path.exists(os.path.join(RAPL, "constraint_0_power_limit_uw")):
-            rapl_cmds.append(f"echo {pl1 * 1000000} > {RAPL}/constraint_0_power_limit_uw")
-            rapl_cmds.append(f"echo {pl2 * 1000000} > {RAPL}/constraint_1_power_limit_uw")
-            rapl_cmds.append(f"echo {tau * 1000000} > {RAPL}/constraint_0_time_window_us")
 
         # Fan curve writes via hwmon (PWM 0-255)
         hwmon = None
@@ -642,10 +580,8 @@ class CustomSettingsWindow(Adw.Window):
                 cmds.append(f"echo {p[1]} > {hwmon}/pwm2_auto_point{pt}_temp")
                 cmds.append(f"echo {p[2]} > {hwmon}/pwm3_auto_point{pt}_temp")
 
-        # Build command chain: TCC/RAPL first (must succeed), EC sysfs + fan curve second
-        critical = [tcc_cmd] + rapl_cmds + cmds
-        if critical:
-            hw_write(" && ".join(critical))
+        if cmds:
+            hw_write(" && ".join(cmds))
 
         if close:
             try:
