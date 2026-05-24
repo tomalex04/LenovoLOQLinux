@@ -373,8 +373,8 @@ class CustomSettingsWindow(Adw.Window):
 
     def _add_preset(self):
         name = f"Preset {len(self.profiles) + 1}"
-        self.sync_profile_from_ui()
         self.current_profile_name = name
+        self.sync_profile_from_ui(name)
         self.save_profiles()
         self.refresh_presets()
 
@@ -390,10 +390,12 @@ class CustomSettingsWindow(Adw.Window):
         self.save_profiles()
         self.refresh_presets()
 
-    def sync_profile_from_ui(self):
-        """Sync current UI values into the current profile dict."""
+    def sync_profile_from_ui(self, name=None):
+        """Sync current UI values into the profile dict at the given name."""
+        if name is None:
+            name = self.current_profile_name
         tau_vals = [20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160]
-        self.profiles[self.current_profile_name] = {
+        self.profiles[name] = {
             "pl1": int(self.pl1.get_value()),
             "pl2": int(self.pl2.get_value()),
             "cross_load": int(self.cross_load.get_value()),
@@ -410,7 +412,8 @@ class CustomSettingsWindow(Adw.Window):
 
     def save_current(self, close):
         """Save settings to local profile and write to hardware via single pkexec."""
-        # Safety confirmation dialog
+        self.sync_profile_from_ui()
+        self.save_profiles()
         dialog = Adw.MessageDialog(
             transient_for=self,
             heading="Apply Custom Settings?",
@@ -427,16 +430,6 @@ class CustomSettingsWindow(Adw.Window):
     def _do_save(self, close):
         """Actually perform the hardware write after user confirmation."""
         tau_vals = [20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160]
-        p = {
-            "pl1": int(self.pl1.get_value()), "pl2": int(self.pl2.get_value()),
-            "cross_load": int(self.cross_load.get_value()), "peak": int(self.total_ac.get_value()),
-            "tau": tau_vals[self.pl2_duration.get_selected()],
-            "dyn_boost": [5,10,15][self.dyn_boost.get_selected()], "ctgp": [60,65,70,75,80][self.ctgp.get_selected()],
-            "gpu_temp": int(self.gpu_temp.get_value()),
-            "cpu_temp": int(self.cpu_temp.get_value())
-        }
-        self.profiles[self.current_profile_name] = p
-        with open(PROFILES_FILE, "w") as f: json.dump(self.profiles, f)
 
         # Build a single compound command — one pkexec password prompt
         cmds = []
