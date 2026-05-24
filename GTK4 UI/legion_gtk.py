@@ -411,7 +411,7 @@ class CustomSettingsWindow(Adw.Window):
         self.gpu_temp.set_value(p.get("gpu_temp", 87))
         self.max_fan.set_active(p.get("max_fan", False))
         fan = p.get("fan")
-        if fan and len(fan) >= 2 and hasattr(self, 'graph'):
+        if fan and len(fan) >= 2 and len(fan[0]) >= 4 and hasattr(self, 'graph'):
             self.graph.points = [list(pt) for pt in fan]
             self.graph.queue_draw()
 
