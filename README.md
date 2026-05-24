@@ -61,8 +61,6 @@ Writes to EC staging registers (0xCF00+, stride 6) via hwmon sysfs. The EC commi
 
 ## ⚠️ Known Limitations
 
-**Fan Curve:**
-Working via EC staging writes + 0xCFB6 bit 4 commit. Effective PWM range 40–128 (1700–5000 RPM). 10 snap points with monotonic enforcement. PWM values above 128 produce no additional RPM.
 
 **Cross Loading, Total AC, GPU Temp Limit (Unenforced on Linux):**
 These three settings are Windows-managed policies. The WMI/EC writes succeed and the values persist correctly to the hardware memory, but the actual enforcement of these thresholds requires the proprietary Lenovo Vantage services running in the background. They will not clamp power on Linux.
@@ -118,28 +116,26 @@ dmesg | tail -20
 ls /sys/bus/platform/devices/PNP0C09:00/
 ```
 
-### 3. Install Python Dependencies
+
+
+### 3. Permanent Installation (DKMS & Daemon)
+To install the driver permanently so it survives kernel updates and auto-loads on boot, use DKMS:
 ```bash
-cd ..
-# Create a conda environment (recommended)
-conda create -n LLL python=3.10 -y
-conda activate LLL
-conda install -c conda-forge pygobject gtk4 libadwaita -y
-pip install pyyaml pillow
+sudo apt-get install dkms  # Or your distro's equivalent
+cd kernel_module
+sudo make dkms
 ```
 
-Or with pip only (without conda):
-```bash
-pip install pyyaml pillow
-```
+This command will:
+1. Build and install the `legion-laptop` module permanently into your kernel tree via DKMS.
+2. Auto-load the module on boot.
+3. Install and enable the `legiond.service` background daemon (which automatically reapplies your Custom power profile when switching modes).
 
-### 4. Reload After Reboot
-The kernel module must be reloaded after each reboot:
+If you ever need to uninstall the driver, run:
 ```bash
-sudo insmod /path/to/LenovoLOQLinux/kernel_module/legion-laptop.ko
+sudo dkms remove LenovoLegionLinux/1.0.0 --all
+sudo make uninstall
 ```
-
-To auto-load on boot, add the `insmod` command to `/etc/rc.local` or create a systemd oneshot service.
 
 ## :desktop_computer: Usage
 
