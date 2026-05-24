@@ -21,108 +21,95 @@ def hw_write(cmd_str):
 
 
 # ===================================================================
-# FAN CURVE WIDGET — DISABLED (EC commit broken on LOQ 15IAX9)
-#
-# The EC has two fan curve regions: staging (0xCF00+, stride 6) and
-# active (0xC507+, stride 3). Writes land in staging but the EC commit
-# at 0xCFB6 bit 4 does NOT copy staging->active on this model.
-# Uncomment when the EC commit mechanism is discovered.
+# FAN CURVE WIDGET — Working on LOQ 15IAX9
+# Writes to EC staging via hwmon (PWM 0-255). EC commit at 0xCFB6
+# bit 4 triggers the copy to active registers.
 # ===================================================================
 
-# class FanCurveWidget(Gtk.DrawingArea):
-#     SNAP = [0,3,6,9,12,15,18,21,24,27,30,33,36,39,42,45,48]
-#     MAX_PWM = 48
-#     TRIGGERS = [
-#         [60,42,48], [64,48,52], [68,54,56], [72,60,60], [76,66,64],
-#         [80,72,68], [84,80,72], [88,88,76], [93,94,81], [98,99,86]
-#     ]
-#     DEFAULTS = [
-#         [60,42,48, 0], [64,48,52, 6], [68,54,56, 9], [72,60,60, 15],
-#         [76,66,64,21], [80,72,68,27], [84,80,72,30], [88,88,76,36],
-#         [93,94,81,42], [98,99,86,48]
-#     ]
-# 
-#     DEFAULTS = [
-#         [60,42,48, 0], [64,48,52, 6], [68,54,56, 9], [72,60,60, 15],
-#         [76,66,64,21], [80,72,68,27], [84,80,72,30], [88,88,76,36],
-#         [93,94,81,42], [98,99,86,48]
-#     ]
-#
-#     def __init__(self):
-#         super().__init__()
-#         self.set_hexpand(True); self.set_vexpand(True); self.set_size_request(600, 400)
-#         self.set_draw_func(self.on_draw)
-#         self.points = [list(p) for p in self.DEFAULTS]
-#         self.drag_idx = -1
-#         gesture = Gtk.GestureClick(); gesture.connect("pressed", self.on_pressed); self.add_controller(gesture)
-#         drag = Gtk.GestureDrag(); drag.connect("drag-update", self.on_drag_update); drag.connect("drag-end", self.on_drag_end); self.add_controller(drag)
-#
-#     def snap(self, pwm):
-#         return min(self.SNAP, key=lambda s: abs(s - pwm))
-#
-#     def on_draw(self, area, cr, width, height):
-#         ml, mb, mt, mr = 80, 70, 20, 20
-#         w, h = width - ml - mr, height - mt - mb
-#         cr.set_source_rgb(0.12, 0.12, 0.12); cr.rectangle(ml, mt, w, h); cr.fill()
-#         cr.set_source_rgb(0.22, 0.22, 0.22); cr.set_line_width(1)
-#         for sv in self.SNAP:
-#             y = mt + h - (sv * h / self.MAX_PWM); cr.move_to(ml, y); cr.line_to(ml + w, y)
-#         for i in range(11):
-#             x = ml + (i * w / 10); cr.move_to(x, mt); cr.line_to(x, mt + h)
-#         cr.stroke()
-#         cr.set_source_rgb(0.6, 0.6, 0.6); cr.set_font_size(12)
-#         cr.move_to(5, mt + h + 15); cr.show_text("Fan Speed")
-#         for sv in [0, 12, 24, 36, 48]:
-#             pct = sv * 100 // 48
-#             cr.move_to(ml - 47, mt + h - (sv * h / self.MAX_PWM) + 5); cr.show_text(f"{pct}%")
-#         cr.move_to(ml + w - 40, mt + h + 50); cr.show_text("100 °C")
-#         cr.set_source_rgb(0.35, 0.35, 0.35); cr.set_line_width(3)
-#         for i, p in enumerate(self.points):
-#             x, y = ml + (i * w / 9), mt + h - (p[3] * h / self.MAX_PWM)
-#             if i == 0: cr.move_to(x, y)
-#             else: cr.line_to(x, y)
-#         cr.stroke()
-#         cr.set_source_rgba(0.35, 0.35, 0.35, 0.15)
-#         for i, p in enumerate(self.points):
-#             x, y = ml + (i * w / 9), mt + h - (p[3] * h / self.MAX_PWM)
-#             if i == 0: cr.move_to(x, y)
-#             else: cr.line_to(x, y)
-#         cr.line_to(ml + (9 * w / 9), mt + h); cr.line_to(ml, mt + h); cr.close_path(); cr.fill()
-#         for i, p in enumerate(self.points):
-#             x, y = ml + (i * w / 9), mt + h - (p[3] * h / self.MAX_PWM)
-#             cr.arc(x, y, 7, 0, 2 * math.pi)
-#             cr.set_source_rgb(1, 0.2, 0.2) if i == self.drag_idx else cr.set_source_rgb(0.2, 0.7, 1)
-#             cr.fill()
-#         cr.set_source_rgb(0.3, 0.3, 0.3); cr.set_line_width(1)
-#         for i, p in enumerate(self.points):
-#             x, y = ml + (i * w / 9), mt + h - (p[3] * h / self.MAX_PWM)
-#             cr.move_to(x, y + 7); cr.line_to(x, mt + h)
-#         cr.stroke()
-#
-#     def on_pressed(self, g, n, x, y):
-#         ml, mt = 80, 20
-#         w, h = self.get_width() - ml - 20, self.get_height() - mt - 60
-#         for i, p in enumerate(self.points):
-#             px, py = ml + (i * w / 9), mt + h - (p[3] * h / self.MAX_PWM)
-#             if math.sqrt((x-px)**2 + (y-py)**2) < 25:
-#                 self.drag_idx = i; self.queue_draw(); return
-#
-#     def on_drag_update(self, g, dx, dy):
-#         if self.drag_idx == -1: return
-#         ml, mt = 80, 20
-#         w, h = self.get_width() - ml - 20, self.get_height() - mt - 60
-#         ok, sx, sy = g.get_start_point()
-#         if not ok: return
-#         raw = self.MAX_PWM - ((sy + dy - mt) * self.MAX_PWM / h)
-#         ns = self.snap(max(0, min(self.MAX_PWM, int(raw))))
-#         self.points[self.drag_idx][3] = ns
-#         for j in range(self.drag_idx + 1, 10):
-#             if self.points[j][3] < ns: self.points[j][3] = ns
-#         for j in range(self.drag_idx - 1, -1, -1):
-#             if self.points[j][3] > ns: self.points[j][3] = ns
-#         self.queue_draw()
-#
-#     def on_drag_end(self, g, dx, dy): self.drag_idx = -1; self.queue_draw()
+class FanCurveWidget(Gtk.DrawingArea):
+    SNAP = [round(i * 255 / 9) for i in range(10)]
+    MAX_PWM = 255
+    DEFAULTS = [
+        [60, 42, 122], [64, 48, 133], [68, 54, 143], [72, 60, 153],
+        [76, 66, 163], [80, 72, 173], [84, 80, 184], [88, 88, 194],
+        [93, 94, 207], [98, 99, 219]
+    ]
+
+    def __init__(self):
+        super().__init__()
+        self.set_hexpand(True); self.set_vexpand(True); self.set_size_request(600, 400)
+        self.set_draw_func(self.on_draw)
+        self.points = [list(p) for p in self.DEFAULTS]
+        self.drag_idx = -1
+        gesture = Gtk.GestureClick(); gesture.connect("pressed", self.on_pressed); self.add_controller(gesture)
+        drag = Gtk.GestureDrag(); drag.connect("drag-update", self.on_drag_update); drag.connect("drag-end", self.on_drag_end); self.add_controller(drag)
+
+    def snap(self, pwm):
+        return min(self.SNAP, key=lambda s: abs(s - pwm))
+
+    def on_draw(self, area, cr, width, height):
+        ml, mb, mt, mr = 80, 70, 20, 20
+        w, h = width - ml - mr, height - mt - mb
+        cr.set_source_rgb(0.12, 0.12, 0.12); cr.rectangle(ml, mt, w, h); cr.fill()
+        cr.set_source_rgb(0.22, 0.22, 0.22); cr.set_line_width(1)
+        for sv in self.SNAP:
+            y = mt + h - (sv * h / self.MAX_PWM); cr.move_to(ml, y); cr.line_to(ml + w, y)
+        for i in range(11):
+            x = ml + (i * w / 10); cr.move_to(x, mt); cr.line_to(x, mt + h)
+        cr.stroke()
+        cr.set_source_rgb(0.6, 0.6, 0.6); cr.set_font_size(12)
+        cr.move_to(5, mt + h + 15); cr.show_text("Fan Speed")
+        for sv in [0, 64, 128, 192, 255]:
+            pct = sv * 100 // 255
+            cr.move_to(ml - 50, mt + h - (sv * h / self.MAX_PWM) + 5); cr.show_text(f"{pct}%")
+        cr.move_to(ml + w - 40, mt + h + 50); cr.show_text("100 °C")
+        cr.set_source_rgb(0.35, 0.35, 0.35); cr.set_line_width(3)
+        for i, p in enumerate(self.points):
+            x, y = ml + (i * w / 9), mt + h - (p[2] * h / self.MAX_PWM)
+            if i == 0: cr.move_to(x, y)
+            else: cr.line_to(x, y)
+        cr.stroke()
+        cr.set_source_rgba(0.35, 0.35, 0.35, 0.15)
+        for i, p in enumerate(self.points):
+            x, y = ml + (i * w / 9), mt + h - (p[2] * h / self.MAX_PWM)
+            if i == 0: cr.move_to(x, y)
+            else: cr.line_to(x, y)
+        cr.line_to(ml + (9 * w / 9), mt + h); cr.line_to(ml, mt + h); cr.close_path(); cr.fill()
+        for i, p in enumerate(self.points):
+            x, y = ml + (i * w / 9), mt + h - (p[2] * h / self.MAX_PWM)
+            cr.arc(x, y, 7, 0, 2 * math.pi)
+            cr.set_source_rgb(1, 0.2, 0.2) if i == self.drag_idx else cr.set_source_rgb(0.2, 0.7, 1)
+            cr.fill()
+        cr.set_source_rgb(0.3, 0.3, 0.3); cr.set_line_width(1)
+        for i, p in enumerate(self.points):
+            x, y = ml + (i * w / 9), mt + h - (p[2] * h / self.MAX_PWM)
+            cr.move_to(x, y + 7); cr.line_to(x, mt + h)
+        cr.stroke()
+
+    def on_pressed(self, g, n, x, y):
+        ml, mt = 80, 20
+        w, h = self.get_width() - ml - 20, self.get_height() - mt - 70
+        for i, p in enumerate(self.points):
+            px, py = ml + (i * w / 9), mt + h - (p[2] * h / self.MAX_PWM)
+            if math.sqrt((x-px)**2 + (y-py)**2) < 25:
+                self.drag_idx = i; self.queue_draw(); return
+
+    def on_drag_update(self, g, dx, dy):
+        if self.drag_idx == -1: return
+        ml, mt = 80, 20
+        w, h = self.get_width() - ml - 20, self.get_height() - mt - 70
+        ok, sx, sy = g.get_start_point()
+        if not ok: return
+        raw = self.MAX_PWM - ((sy + dy - mt) * self.MAX_PWM / h)
+        ns = self.snap(max(0, min(self.MAX_PWM, int(raw))))
+        self.points[self.drag_idx][2] = ns
+        for j in range(self.drag_idx + 1, 10):
+            if self.points[j][2] < ns: self.points[j][2] = ns
+        for j in range(self.drag_idx - 1, -1, -1):
+            if self.points[j][2] > ns: self.points[j][2] = ns
+        self.queue_draw()
+
+    def on_drag_end(self, g, dx, dy): self.drag_idx = -1; self.queue_draw()
 
 class CustomSettingsWindow(Adw.Window):
     """Custom mode settings window matching Lenovo Vantage layout.
@@ -188,14 +175,13 @@ class CustomSettingsWindow(Adw.Window):
 
         # === Fan Section ===
         fan_group = Adw.PreferencesGroup(title="Fans"); page.add(fan_group)
-        # Fan curve widget disabled — EC commit broken on LOQ 15IAX9
-        # fan_curve_row = Adw.PreferencesGroup(title="Fan curve",
-        #     description="Fan speed is not strictly determined by one temperature sensor. It will raise or lower speed per the highest sensor between CPU, GPU and Heatsink temperature. Exact values will appear when you hover mouse over each step.")
-        # page.add(fan_curve_row)
-        # self.graph = FanCurveWidget(); fan_curve_row.add(self.graph)
-        # fan_reset = Gtk.Button(label="↺ Default", halign=Gtk.Align.CENTER, margin_top=10, margin_bottom=10)
-        # fan_reset.connect("clicked", lambda b: self.on_read_hw())
-        # fan_curve_row.add(fan_reset)
+        fan_curve_row = Adw.PreferencesGroup(title="Fan curve",
+            description="Fan speed is not strictly determined by one temperature sensor. It will raise or lower speed per the highest sensor between CPU, GPU and Heatsink temperature. Exact values will appear when you hover mouse over each step.")
+        page.add(fan_curve_row)
+        self.graph = FanCurveWidget(); fan_curve_row.add(self.graph)
+        fan_reset = Gtk.Button(label="↺ Default", halign=Gtk.Align.CENTER, margin_top=10, margin_bottom=10)
+        fan_reset.connect("clicked", lambda b: self.on_read_hw())
+        fan_curve_row.add(fan_reset)
         max_fan_group = Adw.PreferencesGroup(); page.add(max_fan_group)
         self.max_fan = Adw.SwitchRow(title="Maximum fan speed",
             subtitle="WARNING!\nProlonged usage of this option will degrade fans decreasing their longevity.\nSeriously, be careful with this option!")
@@ -313,15 +299,24 @@ class CustomSettingsWindow(Adw.Window):
         except: pass
         try: self.max_fan.set_active(self.m.maximum_fanspeed.get())
         except: pass
-        # Restore fan curve from saved profile (not hwmon — staging read-back unreliable)
-        # Fan curve disabled — EC commit broken
-        # try:
-        #     saved = self.profiles.get(self.current_profile_name, {})
-        #     fan = saved.get("fan")
-        #     if fan and len(fan) == 10 and len(fan[0]) == 4:
-        #         self.graph.points = [list(p) for p in fan]
-        #         self.graph.queue_draw()
-        # except: pass
+        # Restore fan curve from hwmon
+        try:
+            hwmon = None
+            for d in sorted(glob.glob("/sys/class/hwmon/hwmon*")):
+                try:
+                    with open(os.path.join(d, "name")) as f:
+                        if f.read().strip() == "legion_hwmon":
+                            hwmon = d; break
+                except: pass
+            if hwmon and hasattr(self, 'graph') and hasattr(self.graph, 'points'):
+                for i in range(10):
+                    pt = i + 1
+                    cpu_temp = int(open(os.path.join(hwmon, f"pwm1_auto_point{pt}_temp")).read())
+                    gpu_temp = int(open(os.path.join(hwmon, f"pwm2_auto_point{pt}_temp")).read())
+                    pwm = int(open(os.path.join(hwmon, f"pwm1_auto_point{pt}_pwm")).read())
+                    self.graph.points[i] = [cpu_temp, gpu_temp, pwm]
+                self.graph.queue_draw()
+        except: pass
 
     def refresh_presets(self):
         """Rebuild the preset dropdown from profiles dict."""
@@ -360,6 +355,10 @@ class CustomSettingsWindow(Adw.Window):
         if ct in ctgp_items: self.ctgp.set_selected(ctgp_items.index(ct))
         self.gpu_temp.set_value(p.get("gpu_temp", 87))
         self.max_fan.set_active(p.get("max_fan", False))
+        fan = p.get("fan")
+        if fan and len(fan) == 10 and hasattr(self, 'graph'):
+            self.graph.points = [list(pt) for pt in fan]
+            self.graph.queue_draw()
 
     def on_add_preset(self):
         """Ask for name, then save current settings as a new preset."""
@@ -437,6 +436,7 @@ class CustomSettingsWindow(Adw.Window):
             "ctgp": [60,65,70,75,80][self.ctgp.get_selected()],
             "gpu_temp": int(self.gpu_temp.get_value()),
             "cpu_temp": int(self.cpu_temp.get_value()),
+            "fan": [list(p) for p in self.graph.points] if hasattr(self, 'graph') else []
         }
 
     def save_profiles(self):
@@ -507,6 +507,7 @@ class CustomSettingsWindow(Adw.Window):
         # for d in glob.glob("/sys/devices/pci0000:00/.../hwmon/hwmon*"):
         #     ...
         # See commented FanCurveWidget for details.
+        # Nothing to do here.
 
         # PL1 Tau
         add_cmd("cpu_pl1_tau", tau_vals[self.pl2_duration.get_selected()])
@@ -527,6 +528,22 @@ class CustomSettingsWindow(Adw.Window):
             rapl_cmds.append(f"echo {pl1 * 1000000} > {RAPL}/constraint_0_power_limit_uw")
             rapl_cmds.append(f"echo {pl2 * 1000000} > {RAPL}/constraint_1_power_limit_uw")
             rapl_cmds.append(f"echo {tau * 1000000} > {RAPL}/constraint_0_time_window_us")
+
+        # Fan curve writes via hwmon (PWM 0-255)
+        hwmon = None
+        for d in sorted(glob.glob("/sys/class/hwmon/hwmon*")):
+            try:
+                with open(os.path.join(d, "name")) as f:
+                    if f.read().strip() == "legion_hwmon":
+                        hwmon = d; break
+            except: pass
+        if hwmon and hasattr(self, 'graph'):
+            for i, p in enumerate(self.graph.points):
+                pt = i + 1
+                cmds.append(f"echo {p[2]} > {hwmon}/pwm1_auto_point{pt}_pwm")
+                cmds.append(f"echo {p[2]} > {hwmon}/pwm2_auto_point{pt}_pwm")
+                cmds.append(f"echo {p[0]} > {hwmon}/pwm1_auto_point{pt}_temp")
+                cmds.append(f"echo {p[1]} > {hwmon}/pwm2_auto_point{pt}_temp")
 
         # Build command chain: TCC/RAPL first (must succeed), EC sysfs + fan curve second
         critical = [tcc_cmd] + rapl_cmds + cmds
