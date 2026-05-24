@@ -17,10 +17,10 @@ This project brings hardware-level tuning and custom power/thermal management sp
 ## :rocket: Features
 
 ### ✅ Stress-Tested & Enforced (Verified Working)
-- **Long Term Power Limit (PL1)** — 50W–95W. Enforced via Intel RAPL powercap on the CPU package.
-- **Short Term Power Limit (PL2)** — 60W–167W. Enforced via Intel RAPL powercap. PL2 burst clamps to PL1 when tau expires.
-- **Short Term Power Limit Duration (Tau)** — 20s–160s. Enforced via Intel RAPL time window.
-- **CPU Temperature Limit** — 85°C–100°C. Enforced via Intel TCC Offset (hardware thermal throttling, same as Windows Vantage).
+- **Long Term Power Limit (PL1)** — 50W–95W. Set natively via Lenovo WMI ACPI methods (matches Vantage behavior exactly).
+- **Short Term Power Limit (PL2)** — 60W–167W. Set natively via Lenovo WMI ACPI methods.
+- **Short Term Power Limit Duration (Tau)** — 20s–160s. Set natively via Lenovo WMI ACPI methods.
+- **CPU Temperature Limit** — 85°C–100°C. Set natively via Lenovo WMI ACPI methods.
 - **Dynamic Boost (PPAB)** — 5W/10W/15W. Enforced by EC firmware. Verified dGPU power = cTGP + PPAB under CUDA load.
 - **Configurable TGP (cTGP)** — 60W/65W/70W/75W/80W. Enforced by EC firmware. Verified across all values.
 - **GPU to CPU Dynamic Boost** — 0W/5W/10W/15W. Shifts power limit to the CPU based on CPU usage. Enforced by EC firmware and verified via PyTorch CUDA/CPU stress testing.
