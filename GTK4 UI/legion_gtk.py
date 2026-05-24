@@ -43,8 +43,12 @@ class FanCurveWidget(Gtk.DrawingArea):
         self.set_draw_func(self.on_draw)
         self.points = [list(p) for p in self.DEFAULTS]
         self.drag_idx = -1
+        self.hover_idx = -1
+        self.hover_x = 0; self.hover_y = 0
         gesture = Gtk.GestureClick(); gesture.connect("pressed", self.on_pressed); self.add_controller(gesture)
         drag = Gtk.GestureDrag(); drag.connect("drag-update", self.on_drag_update); drag.connect("drag-end", self.on_drag_end); self.add_controller(drag)
+        motion = Gtk.EventControllerMotion.new()
+        motion.connect("motion", self.on_motion); self.add_controller(motion)
 
     def snap(self, pwm):
         return min(self.SNAP, key=lambda s: abs(s - pwm))
@@ -88,6 +92,26 @@ class FanCurveWidget(Gtk.DrawingArea):
             cr.move_to(x, y + 7); cr.line_to(x, mt + h)
         cr.stroke()
 
+        if self.hover_idx >= 0:
+            p = self.points[self.hover_idx]
+            px = ml + (self.hover_idx * w / 9)
+            py = mt + h - (p[2] * h / self.MAX_PWM)
+            rpm = int(p[2] * 5000 / 128)
+            msg = f"P{self.hover_idx+1}: CPU={p[0]}°C GPU={p[1]}°C\nPWM={p[2]} (~{rpm}RPM)"
+            lines = msg.split("\n")
+            tw, th = 0, 0
+            for ln in lines:
+                (_, _, lw, lh, _, _) = cr.text_extents(ln)
+                tw = max(tw, lw); th += lh + 2
+            tx = min(max(px - tw/2, ml), width - mr - tw - 10)
+            ty = max(py - th - 20, mt)
+            cr.set_source_rgba(0, 0, 0, 0.85)
+            cr.rectangle(tx - 5, ty - 5, tw + 10, th + 10); cr.fill()
+            cr.set_source_rgb(1, 1, 1)
+            line_y = ty
+            for ln in lines:
+                cr.move_to(tx, line_y + 12); cr.show_text(ln); line_y += 14
+
     def on_pressed(self, g, n, x, y):
         ml, mt = 80, 20
         w, h = self.get_width() - ml - 20, self.get_height() - mt - 70
@@ -112,6 +136,20 @@ class FanCurveWidget(Gtk.DrawingArea):
         self.queue_draw()
 
     def on_drag_end(self, g, dx, dy): self.drag_idx = -1; self.queue_draw()
+
+    def on_motion(self, motion, x, y):
+        w = self.get_width() - 100
+        h = self.get_height() - 90
+        found = -1
+        for i, p in enumerate(self.points):
+            px = 80 + (i * w / 9)
+            py = 20 + h - (p[2] * h / self.MAX_PWM)
+            if math.sqrt((x-px)**2 + (y-py)**2) < 25:
+                found = i; break
+        if found != self.hover_idx:
+            self.hover_idx = found
+            self.hover_x = x; self.hover_y = y
+            self.queue_draw()
 
 class CustomSettingsWindow(Adw.Window):
     """Custom mode settings window matching Lenovo Vantage layout.

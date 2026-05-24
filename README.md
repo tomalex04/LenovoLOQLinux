@@ -33,10 +33,9 @@ This project brings hardware-level tuning and custom power/thermal management sp
 
 Writes to EC staging registers (0xCF00+, stride 6) via hwmon sysfs. The EC commit at `0xCFB6` bit 4 copies staging→active. PWM range is 0–255, but EC firmware caps at effective PWM 40 (1700 RPM minimum) and PWM 128 (5000 RPM maximum). Values above 128 produce no additional RPM.
 
-- **10-point interactive Cairo graph** with drag points
-- **10 snap values** spanning PWM 40–128, each producing a distinct RPM step:
-  - PWM 40 → 1700 RPM, 48 → 1900, 57 → 2300, 64 → 2600, 71 → 2800
-  - PWM 85 → 3400, 93 → 3700, 100 → 4000, 114 → 4500, 128 → 5000
+- **10-point interactive Cairo graph** with drag points and hover tooltips showing CPU/GPU temp triggers
+- **10 evenly-spaced Y-axis snap values**: PWM 0–128 with 10 steps (0, 14, 28, 43, 57, 71, 85, 100, 114, 128)
+  - PWM 0–28 → EC minimum (~1400 RPM), 43 → 1700, 57 → 2300, 71 → 2800, 85 → 3400, 100 → 4000, 114 → 4500, 128 → 5000
 - Monotonically enforced (points can't drop below previous)
 - X-axis: CPU temp trigger per point (°C)
 - Y-axis: fan speed in PWM (0–128)
