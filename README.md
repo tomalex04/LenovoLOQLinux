@@ -96,54 +96,33 @@ sudo pacman -S \
 
 ## :hammer_and_wrench: Installation & Setup
 
+The easiest way to install all prerequisites, permanently install the driver via DKMS (so it survives reboots and kernel updates), and create a Desktop application shortcut is to run the automated installation script.
+
 ### 1. Clone the Repository
 ```bash
 git clone https://github.com/tomalex04/LenovoLOQLinux.git
 cd LenovoLOQLinux
 ```
 
-### 2. Build and Load the Kernel Module
+### 2. Run the Install Script
 ```bash
-cd kernel_module
-make
-sudo rmmod legion-laptop 2>/dev/null || true
-sudo insmod legion-laptop.ko
+sudo ./install.sh
 ```
 
-Verify the module loaded:
+This script will automatically:
+- Install all necessary package dependencies (`gcc`, `make`, `dkms`, `python3-gi`, etc.) for your specific distro (Ubuntu, Fedora, or Arch).
+- Compile and install the `legion-laptop` kernel module permanently via DKMS.
+- Install and enable the `legiond.service` background daemon.
+- Install the GUI globally into `/opt/LenovoLOQLinux` and add a "Lenovo LOQ Control" shortcut to your application menu with the official logo.
+
+If you ever wish to remove the driver and application, simply run:
 ```bash
-dmesg | tail -20
-ls /sys/bus/platform/devices/PNP0C09:00/
-```
-
-
-
-### 3. Permanent Installation (DKMS & Daemon)
-To install the driver permanently so it survives kernel updates and auto-loads on boot, use DKMS:
-```bash
-sudo apt-get install dkms  # Or your distro's equivalent
-cd kernel_module
-sudo make dkms
-```
-
-This command will:
-1. Build and install the `legion-laptop` module permanently into your kernel tree via DKMS.
-2. Auto-load the module on boot.
-3. Install and enable the `legiond.service` background daemon (which automatically reapplies your Custom power profile when switching modes).
-
-If you ever need to uninstall the driver, run:
-```bash
-sudo dkms remove LenovoLegionLinux/1.0.0 --all
-sudo make uninstall
+sudo ./uninstall.sh
 ```
 
 ## :desktop_computer: Usage
 
-Launch the GTK4 tuning tool **as a normal user** (NOT root):
-```bash
-cd LenovoLOQLinux
-python3 "GTK4 UI/legion_gtk.py"
-```
+Once installed, simply search for **Lenovo LOQ Control** in your desktop application menu and launch it.
 
 Hardware writes use `pkexec` to prompt for elevation only when needed.
 
