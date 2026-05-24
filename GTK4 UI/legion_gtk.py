@@ -27,13 +27,13 @@ def hw_write(cmd_str):
 # ===================================================================
 
 class FanCurveWidget(Gtk.DrawingArea):
-    # 8 distinct speed levels matching measured RPM
-    SNAP = [0, 43, 57, 71, 85, 100, 114, 128]
+    SNAP = [0, 48, 52, 56, 60, 64, 68, 72, 76, 81, 86, 128]
     MAX_PWM = 128
-    PWM_TO_RPM = {0: 1400, 43: 1700, 57: 2300, 71: 2800, 85: 3400, 100: 4000, 114: 4500, 128: 5000}
+    _RPM_MAP = {0: 1400, 48: 1900, 52: 2100, 56: 2200, 60: 2400, 64: 2600, 68: 2700, 72: 2900, 76: 3000, 81: 3200, 86: 3400, 128: 5000}
     DEFAULTS = [
-        [60, 42, 0], [64, 48, 43], [68, 54, 57], [72, 60, 71],
-        [76, 66, 85], [84, 80, 100], [88, 88, 114], [98, 99, 128]
+        [60, 42, 48], [64, 48, 52], [68, 54, 56], [72, 60, 60],
+        [76, 66, 64], [80, 72, 68], [84, 80, 72], [88, 88, 76],
+        [93, 94, 81], [98, 99, 86]
     ]
 
     def __init__(self):
@@ -53,14 +53,14 @@ class FanCurveWidget(Gtk.DrawingArea):
         return min(self.SNAP, key=lambda s: abs(s - pwm))
 
     def rpm_for_pwm(self, pwm):
-        """Return measured RPM for a given PWM, or estimate if between snap points."""
-        if pwm in self.PWM_TO_RPM:
-            return self.PWM_TO_RPM[pwm]
-        keys = sorted(self.PWM_TO_RPM.keys())
+        """Return measured RPM for a given PWM, or estimate linearly."""
+        if pwm in self._RPM_MAP:
+            return self._RPM_MAP[pwm]
+        keys = sorted(self._RPM_MAP.keys())
         for i in range(len(keys) - 1):
             if keys[i] <= pwm <= keys[i + 1]:
                 frac = (pwm - keys[i]) / (keys[i + 1] - keys[i])
-                return int(self.PWM_TO_RPM[keys[i]] + frac * (self.PWM_TO_RPM[keys[i + 1]] - self.PWM_TO_RPM[keys[i]]))
+                return int(self._RPM_MAP[keys[i]] + frac * (self._RPM_MAP[keys[i + 1]] - self._RPM_MAP[keys[i]]))
         return int(pwm * 5000 / 128)
 
     def on_draw(self, area, cr, width, height):
