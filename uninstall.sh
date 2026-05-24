@@ -16,11 +16,12 @@ cd ..
 
 echo ""
 echo "============================================="
-echo " Removing Desktop App GUI... "
+echo " Removing Desktop App GUI & Configurations... "
 echo "============================================="
 rm -rf /opt/LenovoLOQLinux
 rm -f /usr/share/pixmaps/legion_logo.jpeg
 rm -f /usr/share/applications/lenovoloq.desktop
+rm -f /etc/sudoers.d/lenovoloq_gui
 
 echo ""
 echo "============================================="
