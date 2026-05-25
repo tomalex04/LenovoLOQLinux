@@ -16,12 +16,20 @@ systemctl disable --now legiond.service 2>/dev/null || true
 rm -f /etc/systemd/system/legiond.service
 systemctl daemon-reload 2>/dev/null || true
 
-# Remove the DKMS module (only the legion one — nothing else is touched)
+# Remove ONLY the LenovoLegionLinux DKMS module.
+# 'dkms remove' will:
+#   - Uninstall our custom legion-laptop.ko from every kernel version
+#   - Automatically restore the original in-tree legion-laptop module
+#     if one existed before we installed (Linux kernel >= 5.19 ships one).
+# We intentionally do NOT manually rm .ko files so that DKMS can
+# restore any pre-existing driver without us clobbering it.
 dkms remove LenovoLegionLinux/1.0.0 --all 2>/dev/null || true
 
-# Remove the installed .ko from the kernel tree
-rm -f /lib/modules/*/kernel/drivers/platform/x86/legion-laptop.ko
+# Rebuild module dependency cache after DKMS has cleaned up
 depmod -a 2>/dev/null || true
+
+# Unload our module from the running kernel (ignore error if not loaded)
+rmmod legion_laptop 2>/dev/null || true
 
 # Remove the daemon helper script
 rm -f /usr/local/bin/legion_daemon.py
