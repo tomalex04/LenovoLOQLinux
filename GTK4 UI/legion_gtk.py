@@ -328,9 +328,8 @@ class CustomSettingsWindow(Adw.Window):
                 self.pl2_duration.set_selected(tau_vals.index(tau_raw))
         except: pass
         try:
-            # WMI raw value has a -2 offset from Vantage UI
             raw = int(self.m.cpu_temperature_limit.get())
-            self.cpu_temp.set_value(raw + 2)
+            self.cpu_temp.set_value(raw)
         except: pass
         try: self.cross_load.set_value(int(self.m.cpu_cross_loading_power_limit.get()))
         except: pass
@@ -349,16 +348,15 @@ class CustomSettingsWindow(Adw.Window):
             if val in ctgp_items: self.ctgp.set_selected(ctgp_items.index(val))
         except: pass
         try:
-            # WMI raw value has a +1 offset from Vantage UI
             raw = int(self.m.gpu_temperature_limit.get())
-            self.gpu_temp.set_value(raw - 1)
+            self.gpu_temp.set_value(raw)
         except: pass
         try: self.max_fan.set_active(self.m.maximum_fanspeed.get())
         except: pass
         # GPU to CPU Dynamic Boost dropdown: values 0, 5, 10, 15 → indices 0-3
         try:
-            # WMI raw value is watts * 3
-            val = int(self.m.gpu_to_cpu_dynamic_boost.get()) // 3
+            # WMI raw value is direct watts — no multiplier (confirmed: sysfs=15 when Windows=15)
+            val = int(self.m.gpu_to_cpu_dynamic_boost.get())
             gtc_items = [0, 5, 10, 15]
             if val in gtc_items: self.gpu_to_cpu_boost.set_selected(gtc_items.index(val))
         except: pass
@@ -552,10 +550,8 @@ class CustomSettingsWindow(Adw.Window):
         ]:
             add_cmd(attr_name, int(slider.get_value()))
             
-        # CPU temp limit has a -2 offset in WMI vs Vantage UI
-        add_cmd("cpu_temperature_limit", int(self.cpu_temp.get_value()) - 2)
-        # GPU temp limit has a +1 offset in WMI vs Vantage UI
-        add_cmd("gpu_temperature_limit", int(self.gpu_temp.get_value()) + 1)
+        add_cmd("cpu_temperature_limit", int(self.cpu_temp.get_value()))
+        add_cmd("gpu_temperature_limit", int(self.gpu_temp.get_value()))
 
         # Dynamic Boost
         add_cmd("gpu_ppab_power_limit",
@@ -563,9 +559,10 @@ class CustomSettingsWindow(Adw.Window):
         # Configurable TGP
         add_cmd("gpu_ctgp_power_limit",
                 [60, 65, 70, 75, 80][self.ctgp.get_selected()])
-        # GPU to CPU Dynamic Boost (raw WMI is watts * 3)
+        # GPU to CPU Dynamic Boost: raw sysfs is direct watts, no multiplier
+        # (confirmed: sysfs=15 when Windows=15)
         add_cmd("gpu_to_cpu_dynamic_boost",
-                [0, 5, 10, 15][self.gpu_to_cpu_boost.get_selected()] * 3)
+                [0, 5, 10, 15][self.gpu_to_cpu_boost.get_selected()])
         # Maximum fan speed
         add_cmd("maximum_fanspeed",
                 1 if self.max_fan.get_active() else 0)

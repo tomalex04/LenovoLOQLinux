@@ -28,7 +28,7 @@ This project brings hardware-level tuning and custom power/thermal management sp
 ### ⚠️ WMI-Verified (Requires Windows Services for Enforcement)
 - **Long Term Power Limit (Cross Loading)** — 25W–55W. CPU limit when GPU is active. WMI writes succeed perfectly and save to EC memory, but Lenovo's EC firmware ignores the limit unless proprietary Lenovo Vantage Windows background services are actively running.
 - **Total Processor Power Target In AC** — 10W–70W. GPU→CPU dynamic power adjustment threshold. Same limitation as Cross Loading.
-- **GPU Temperature Limit** — 75°C–87°C. WMI writes succeed with accurate UI mapping (+1 offset), but hardware enforcement requires Windows Vantage services.
+- **GPU Temperature Limit** — 75°C–87°C. WMI writes succeed with exact UI mapping to sysfs, but hardware enforcement may require Windows Vantage services.
 
 ### ✅ Fan Curve — Working on LOQ 15IAX9
 

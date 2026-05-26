@@ -82,12 +82,12 @@ echo "============================================="
 # (Linux >= 5.19), DKMS will back it up before installing ours
 # and will restore it automatically on uninstall — no other drivers
 # are removed or modified at any point.
-# Clean up any pre-existing DKMS directory to avoid Makefile add/build bugs
-rm -rf /usr/src/LenovoLegionLinux-1.0.0
 cd "$REPO_DIR/kernel_module"
-# Remove any stale LenovoLegionLinux DKMS entry before reinstalling
-# (safe: this only removes our own previously registered DKMS entry)
+# Step 1: deregister from DKMS database FIRST (source dir must still exist for this to work)
 dkms remove LenovoLegionLinux/1.0.0 --all 2>/dev/null || true
+# Step 2: NOW clean the source directory — forces Makefile to take the fresh 'dkms add' path
+rm -rf /usr/src/LenovoLegionLinux-1.0.0
+# Step 3: build and install fresh
 make dkms
 cd "$REPO_DIR"
 
