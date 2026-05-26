@@ -24,10 +24,10 @@ This project brings hardware-level tuning and custom power/thermal management sp
 - **Dynamic Boost (PPAB)** — 5W/10W/15W. Enforced natively. Verified GPU power hits exact `cTGP + PPAB` ceiling under combined PyTorch CUDA + CPU load.
 - **Configurable TGP (cTGP)** — 60W/65W/70W/75W/80W. Enforced natively by EC firmware.
 - **GPU to CPU Dynamic Boost** — 0W/5W/10W/15W. Shifts power limit to the CPU based on CPU usage. WMI values mapped internally.
+- **Long Term Power Limit (Cross Loading)** — 25W–55W. CPU limit when GPU is active. Enforced natively.
+- **Total Processor Power Target In AC** — 10W–70W. GPU→CPU dynamic power adjustment threshold. Enforced natively.
 
 ### ⚠️ WMI-Verified (Requires Windows Services for Enforcement)
-- **Long Term Power Limit (Cross Loading)** — 25W–55W. CPU limit when GPU is active. WMI writes succeed perfectly and save to EC memory, but Lenovo's EC firmware ignores the limit unless proprietary Lenovo Vantage Windows background services are actively running.
-- **Total Processor Power Target In AC** — 10W–70W. GPU→CPU dynamic power adjustment threshold. Same limitation as Cross Loading.
 - **GPU Temperature Limit** — 75°C–87°C. WMI writes succeed with exact UI mapping to sysfs, but hardware enforcement may require Windows Vantage services.
 
 ### ✅ Fan Curve — Working on LOQ 15IAX9
@@ -62,8 +62,8 @@ Writes to EC staging registers (0xCF00+, stride 6) via hwmon sysfs. The EC commi
 ## ⚠️ Known Limitations
 
 
-**Cross Loading, Total AC, GPU Temp Limit (Unenforced on Linux):**
-These three settings are Windows-managed policies. The WMI/EC writes succeed and the values persist correctly to the hardware memory, but the actual enforcement of these thresholds requires the proprietary Lenovo Vantage services running in the background. They will not clamp power on Linux.
+**GPU Temp Limit (Unenforced on Linux):**
+This setting is a Windows-managed policy. The WMI/EC writes succeed and the value persists correctly to the hardware memory, but the actual enforcement of this threshold requires the proprietary Lenovo Vantage services running in the background. It will not clamp power on Linux.
 
 **Single-Model Support:**
 The kernel module has been stripped to support ONLY the LOQ 15IAX9 (NECN BIOS). All other laptop model configurations have been removed.
