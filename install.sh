@@ -82,6 +82,8 @@ echo "============================================="
 # (Linux >= 5.19), DKMS will back it up before installing ours
 # and will restore it automatically on uninstall — no other drivers
 # are removed or modified at any point.
+# Clean up any pre-existing DKMS directory to avoid Makefile add/build bugs
+rm -rf /usr/src/LenovoLegionLinux-1.0.0
 cd "$REPO_DIR/kernel_module"
 # Remove any stale LenovoLegionLinux DKMS entry before reinstalling
 # (safe: this only removes our own previously registered DKMS entry)
@@ -93,6 +95,8 @@ echo ""
 echo "============================================="
 echo " Installing Desktop App GUI...               "
 echo "============================================="
+# Clean up previous installation to avoid stale or conflicting files
+rm -rf /opt/LenovoLOQLinux
 mkdir -p /opt/LenovoLOQLinux
 cp -r "$REPO_DIR/GTK4 UI" /opt/LenovoLOQLinux/
 cp -r "$REPO_DIR/python" /opt/LenovoLOQLinux/

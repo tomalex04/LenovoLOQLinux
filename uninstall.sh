@@ -24,6 +24,7 @@ systemctl daemon-reload 2>/dev/null || true
 # We intentionally do NOT manually rm .ko files so that DKMS can
 # restore any pre-existing driver without us clobbering it.
 dkms remove LenovoLegionLinux/1.0.0 --all 2>/dev/null || true
+rm -rf /usr/src/LenovoLegionLinux-1.0.0
 
 # Rebuild module dependency cache after DKMS has cleaned up
 depmod -a 2>/dev/null || true
