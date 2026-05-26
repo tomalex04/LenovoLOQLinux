@@ -2,6 +2,12 @@ SHELL := /bin/bash
 KERNELVERSION  ?= $(shell uname --kernel-release)
 KSRC := /lib/modules/$(KERNELVERSION)/build
 
+IS_CLANG := $(shell grep -q "CONFIG_CC_IS_CLANG=y" $(KSRC)/.config 2>/dev/null && echo 1 || echo 0)
+ifeq ($(IS_CLANG), 1)
+    MAKE_OPTS := LLVM=1
+else
+    MAKE_OPTS :=
+endif
 #install dir for kernel drivers
 INSTALLDIR := /lib/modules/$(KERNELVERSION)/kernel/drivers/platform/x86
 MODDESTDIR := /lib/modules/$(KERNELVERSION)/kernel/drivers/platform/x86
@@ -10,16 +16,16 @@ DKMSDIR := /usr/src/LenovoLegionLinux-1.0.0
 obj-m += legion-laptop.o
 
 all:
-	$(MAKE) -C $(KSRC) M=$(shell pwd) modules
+	$(MAKE) -C $(KSRC) M=$(shell pwd) $(MAKE_OPTS) modules
 
 moduleInContainer:
 	docker run -it --rm -v "$(shell pwd)":/kernel_module -w /kernel_module  -v /usr/src/:/usr/src/  -v /lib/modules/:/lib/modules gcc:12.2.0 bash
 
 allWarn:
-	$(MAKE) -C $(KSRC) M=$(shell pwd) KCFLAGS=-W modules
+	$(MAKE) -C $(KSRC) M=$(shell pwd) KCFLAGS=-W $(MAKE_OPTS) modules
 
 clean:
-	make -C $(KSRC) M=$(shell pwd) clean
+	make -C $(KSRC) M=$(shell pwd) $(MAKE_OPTS) clean
 
 install: all
 	@rm --force --verbose $(INSTALLDIR)/legion-laptop.ko

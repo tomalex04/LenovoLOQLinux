@@ -70,7 +70,7 @@ The kernel module has been stripped to support ONLY the LOQ 15IAX9 (NECN BIOS). 
 
 ## :gear: Prerequisites
 
-> **Note:** The `install.sh` script automatically installs all prerequisites for Ubuntu/Debian, Fedora/RHEL, and Arch/Manjaro. You only need to install these manually if you are not using the automated installer.
+> **Note:** You must install these prerequisites manually using your distribution's package manager before running the installation script.
 
 ### Ubuntu 24.04 / Debian / Pop!_OS / Mint
 ```bash
@@ -98,7 +98,7 @@ sudo pacman -S \
 
 ## :hammer_and_wrench: Installation & Setup
 
-The easiest way to install all prerequisites, permanently install the driver via DKMS (so it survives reboots and kernel updates), and create a Desktop application shortcut is to run the automated installation script.
+The easiest way to permanently install the driver via DKMS (so it survives reboots and kernel updates), and create a Desktop application shortcut is to run the automated installation script. Make sure you have installed all prerequisites above before running the script.
 
 ### 1. Clone the Repository
 ```bash
@@ -112,7 +112,6 @@ sudo ./install.sh
 ```
 
 This will automatically:
-- Install all necessary package dependencies for your distro (Ubuntu/Debian, Fedora/RHEL, or Arch/Manjaro).
 - Build and install the `legion-laptop` kernel module **permanently via DKMS** — it will survive reboots and kernel updates. No other drivers are affected.
 - Install and enable the `legiond.service` background daemon that auto-applies your Custom profile on mode switches.
 - Install the GUI into `/opt/LenovoLOQLinux` and register a **"Lenovo LOQ Control"** shortcut in your application menu.
