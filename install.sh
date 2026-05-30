@@ -70,6 +70,16 @@ update-desktop-database /usr/share/applications 2>/dev/null || true
 
 echo ""
 echo "============================================="
+echo " Installing Background Daemon...             "
+echo "============================================="
+cp "$REPO_DIR/kernel_module/legion_daemon.py" /usr/local/bin/
+chmod +x /usr/local/bin/legion_daemon.py
+cp "$REPO_DIR/kernel_module/legiond.service" /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now legiond.service
+
+echo ""
+echo "============================================="
 echo " Installation Complete!                      "
 echo "============================================="
 echo ""
