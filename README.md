@@ -48,7 +48,7 @@ Writes to EC staging registers (0xCF00+, stride 6) via hwmon sysfs. The EC commi
 ### ✅ Working (Non-Custom-Mode)
 - **Power Mode Switching** — Quiet, Balanced, Performance, Custom. WMI-based. Fn+Q hotkeys continue to work independently.
 - **Battery Conservation Mode** — Stops charging at 80% to prolong battery health.
-- **Rapid Charging Mode** — Fast charging toggle (mutually exclusive with Conservation Mode).
+
 - **Real-time Monitoring** — CPU/GPU temperatures, fan RPM.
 
 ### ✅ Preset System
@@ -132,7 +132,7 @@ Hardware writes use `pkexec` to prompt for elevation only when needed.
 
 ### GUI Controls
 - **Status Tab:** Monitor CPU/GPU temperatures and fan RPM. Switch power modes via the dropdown.
-- **Battery Tab:** View charge percentage. Toggle Conservation Mode and Rapid Charge.
+- **Battery Tab:** View charge percentage. Toggle Conservation Mode.
 - **Custom Mode (gear icon):** Only visible when Custom/Balanced-Performance mode is active.
   - **Read from HW:** Sync sliders with current hardware values.
   - **CPU Section:** PL1, PL2, Tau, Cross Loading, CPU Temperature Limit.

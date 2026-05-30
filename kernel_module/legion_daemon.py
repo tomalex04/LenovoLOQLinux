@@ -3,6 +3,7 @@ import os
 import time
 import json
 import logging
+import glob
 
 logging.basicConfig(level=logging.INFO)
 
@@ -62,38 +63,53 @@ def apply_custom_preset():
                 logging.info("No 'Default' profile found either.")
                 return
 
-        # Mapping: profile_key -> (sysfs_node_name, offset_fn)
-        # Offsets MUST match the GUI write path in legion_gtk.py exactly:
-        #   cpu_temperature_limit    : sysfs = UI_value - 2
-        #   gpu_temperature_limit    : sysfs = UI_value + 4  (confirmed: sysfs=87 when UI=83)
-        #   gpu_to_cpu_dynamic_boost : sysfs = UI_value      (direct watts, no multiplier)
-        #   all power limits         : sysfs = UI_value      (no offset)
-        mapping = {
-            "pl1":              ("cpu_longterm_powerlimit",      lambda v: v),
-            "pl2":              ("cpu_shortterm_powerlimit",     lambda v: v),
-            "cross_load":       ("cpu_cross_loading_powerlimit", lambda v: v),
-            "peak":             ("cpu_peak_powerlimit",          lambda v: v),
-            "dyn_boost":        ("gpu_ppab_powerlimit",          lambda v: v),
-            "ctgp":             ("gpu_ctgp_powerlimit",          lambda v: v),
-            "gpu_temp":         ("gpu_temperature_limit",        lambda v: v),
-            "cpu_temp":         ("cpu_temperature_limit",        lambda v: v),
-            "gpu_to_cpu_boost": ("gpu_to_cpu_dynamic_boost",    lambda v: v),
-        }
-
         logging.info("Applying custom preset...")
-        for key, (sysfs_name, offset_fn) in mapping.items():
-            if key in custom:
-                path = os.path.join(SYSFS_BASE, sysfs_name)
-                if os.path.exists(path):
+        
+        def write_sysfs(attr_name, value):
+            path = os.path.join(SYSFS_BASE, attr_name)
+            if os.path.exists(path):
+                try:
+                    with open(path, "w") as sf:
+                        sf.write(str(value))
+                    logging.info(f"  -> Set {attr_name} to {value}")
+                except Exception as e:
+                    logging.error(f"  -> Error writing {attr_name}: {e}")
+            else:
+                logging.warning(f"  -> Sysfs node not found: {path}")
+
+        if "pl1" in custom: write_sysfs("cpu_longterm_power_limit", custom["pl1"])
+        if "pl2" in custom: write_sysfs("cpu_shortterm_power_limit", custom["pl2"])
+        if "cross_load" in custom: write_sysfs("cpu_cross_loading_power_limit", custom["cross_load"])
+        if "peak" in custom: write_sysfs("cpu_peak_power_limit", custom["peak"])
+        if "cpu_temp" in custom: write_sysfs("cpu_temperature_limit", custom["cpu_temp"])
+        if "gpu_temp" in custom: write_sysfs("gpu_temperature_limit", custom["gpu_temp"])
+        if "dyn_boost" in custom: write_sysfs("gpu_ppab_power_limit", custom["dyn_boost"])
+        if "ctgp" in custom: write_sysfs("gpu_ctgp_power_limit", custom["ctgp"])
+        if "gpu_to_cpu_boost" in custom: write_sysfs("gpu_to_cpu_dynamic_boost", custom["gpu_to_cpu_boost"])
+        if "max_fan" in custom: write_sysfs("maximum_fanspeed", 1 if custom["max_fan"] else 0)
+        if "tau" in custom: write_sysfs("cpu_pl1_tau", custom["tau"])
+
+        fan = custom.get("fan")
+        if fan:
+            hwmon = None
+            for d in sorted(glob.glob("/sys/class/hwmon/hwmon*")):
+                try:
+                    with open(os.path.join(d, "name")) as f:
+                        if f.read().strip() == "legion_hwmon":
+                            hwmon = d; break
+                except: pass
+            if hwmon:
+                for i, pt_data in enumerate(fan):
+                    pt = i + 1
                     try:
-                        raw_val = offset_fn(int(custom[key]))
-                        with open(path, "w") as sf:
-                            sf.write(str(raw_val))
-                        logging.info(f"  -> Set {sysfs_name} to {raw_val} (profile value: {custom[key]})")
+                        with open(f"{hwmon}/pwm1_auto_point{pt}_pwm", "w") as f: f.write(str(pt_data[3]))
+                        with open(f"{hwmon}/pwm2_auto_point{pt}_pwm", "w") as f: f.write(str(pt_data[3]))
+                        with open(f"{hwmon}/pwm1_auto_point{pt}_temp", "w") as f: f.write(str(pt_data[0]))
+                        with open(f"{hwmon}/pwm2_auto_point{pt}_temp", "w") as f: f.write(str(pt_data[1]))
+                        with open(f"{hwmon}/pwm3_auto_point{pt}_temp", "w") as f: f.write(str(pt_data[2]))
                     except Exception as e:
-                        logging.error(f"  -> Error writing {key}: {e}")
-                else:
-                    logging.warning(f"  -> Sysfs node not found: {path}")
+                        logging.error(f"  -> Error writing fan curve point {pt}: {e}")
+                logging.info("  -> Set fan curve via hwmon")
 
         logging.info("Custom preset applied successfully.")
     except Exception as e:

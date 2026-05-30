@@ -13,11 +13,11 @@ PROFILES_FILE = os.path.join(CONFIG_DIR, "profiles.json")
 SYSFS_BASE = "/sys/bus/platform/devices/PNP0C09:00"
 
 def hw_write(cmd_str):
-    """Write to hardware sysfs nodes via pkexec for non-root users."""
+    """Write to hardware sysfs nodes via sudo for non-root users."""
     print(f"HW_WRITE: {cmd_str}")
     cmd = ['sh', '-c', cmd_str]
-    if os.getuid() != 0: cmd = ['pkexec'] + cmd
-    subprocess.Popen(cmd, stdout=None, stderr=None)
+    if os.getuid() != 0: cmd = ['sudo', '/opt/LenovoLOQLinux/hw_write.sh', cmd_str]
+    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 # ===================================================================
@@ -588,7 +588,7 @@ class CustomSettingsWindow(Adw.Window):
                 cmds.append(f"echo {p[2]} > {hwmon}/pwm3_auto_point{pt}_temp")
 
         if cmds:
-            hw_write(" && ".join(cmds))
+            hw_write(" ; ".join(cmds))
 
         if close:
             try:
@@ -623,9 +623,9 @@ class LegionApp(Adw.Application):
         p2 = Gtk.Box(orientation=1, spacing=20); [getattr(p2,f"set_margin_{m}")(32) for m in ["top","bottom","start","end"]]
         self.perc = Adw.StatusPage(title="--%", icon_name="battery-full-symbolic"); p2.append(self.perc)
         g2 = Adw.PreferencesGroup(title="Battery Settings")
-        self.cons = Adw.SwitchRow(title="Conservation Mode", subtitle="Limit charge to 80%"); self.rapid = Adw.SwitchRow(title="Rapid Charge", subtitle="Charge faster")
-        self.cons.connect("notify::active", self.on_batt); self.rapid.connect("notify::active", self.on_batt)
-        g2.add(self.cons); g2.add(self.rapid); p2.append(g2); stack.add_titled_with_icon(p2, "batt", "Battery", "battery-full-symbolic")
+        self.cons = Adw.SwitchRow(title="Conservation Mode", subtitle="Limit charge to 80%")
+        self.cons.connect("notify::active", self.on_batt)
+        g2.add(self.cons); p2.append(g2); stack.add_titled_with_icon(p2, "batt", "Battery", "battery-full-symbolic")
         self.sync_ui(); GLib.timeout_add(1000, self.update); GLib.timeout_add_seconds(3, self.lazy_refresh); win.present()
 
     def lazy_refresh(self): self.sync_ui(); return True
@@ -633,6 +633,23 @@ class LegionApp(Adw.Application):
         if time.time() < self.lock_time: return
         try:
             curr = self.m.platform_profile.get()
+            if not hasattr(self, '_prev_mode'):
+                self._prev_mode = curr
+            
+            if curr != self._prev_mode:
+                if curr in ["custom", "balanced-performance"]:
+                    try:
+                        with open(os.path.join(CONFIG_DIR, "last_active.txt"), "r") as f:
+                            saved_name = f.read().strip()
+                        if os.path.exists(PROFILES_FILE):
+                            with open(PROFILES_FILE, "r") as f:
+                                profiles = json.load(f)
+                            if saved_name in profiles:
+                                self._apply_profile_bg(profiles[saved_name])
+                    except Exception as e:
+                        print("Error applying previous profile:", e)
+                self._prev_mode = curr
+
             # Map kernel values to display values (handles aliases)
             mode_alias = {"custom": "balanced-performance", "quiet": "low-power"}
             display_curr = mode_alias.get(curr, curr)
@@ -643,10 +660,52 @@ class LegionApp(Adw.Application):
             # Settings gear only for custom mode
             self.mode_btn.set_visible(curr in ["255", "custom", "balanced-performance"])
             self.perc.set_title(f"{int(self.m.battery_capacity_perc.get())}%")
-            self.cons.handler_block_by_func(self.on_batt); self.rapid.handler_block_by_func(self.on_batt)
-            self.cons.set_active(self.m.battery_conservation.get()); self.rapid.set_active(self.m.rapid_charging.get())
-            self.cons.handler_unblock_by_func(self.on_batt); self.rapid.handler_unblock_by_func(self.on_batt)
+            self.cons.handler_block_by_func(self.on_batt)
+            try:
+                self.cons.set_active(self.m.battery_conservation.get())
+            except:
+                pass
+            self.cons.handler_unblock_by_func(self.on_batt)
         except: pass
+    
+    def _apply_profile_bg(self, p):
+        cmds = []
+        def add_cmd(attr_name, value):
+            feat = getattr(self.m, attr_name, None)
+            if feat and feat.exists(): cmds.append(f"echo {value} > {feat.filename}")
+
+        if "pl1" in p: add_cmd("cpu_longterm_power_limit", p["pl1"])
+        if "pl2" in p: add_cmd("cpu_shortterm_power_limit", p["pl2"])
+        if "cross_load" in p: add_cmd("cpu_cross_loading_power_limit", p["cross_load"])
+        if "peak" in p: add_cmd("cpu_peak_power_limit", p["peak"])
+        if "cpu_temp" in p: add_cmd("cpu_temperature_limit", p["cpu_temp"])
+        if "gpu_temp" in p: add_cmd("gpu_temperature_limit", p["gpu_temp"])
+        if "dyn_boost" in p: add_cmd("gpu_ppab_power_limit", p["dyn_boost"])
+        if "ctgp" in p: add_cmd("gpu_ctgp_power_limit", p["ctgp"])
+        if "gpu_to_cpu_boost" in p: add_cmd("gpu_to_cpu_dynamic_boost", p["gpu_to_cpu_boost"])
+        if "max_fan" in p: add_cmd("maximum_fanspeed", 1 if p["max_fan"] else 0)
+        if "tau" in p: add_cmd("cpu_pl1_tau", p["tau"])
+        
+        fan = p.get("fan")
+        if fan:
+            hwmon = None
+            for d in sorted(glob.glob("/sys/class/hwmon/hwmon*")):
+                try:
+                    with open(os.path.join(d, "name")) as f:
+                        if f.read().strip() == "legion_hwmon":
+                            hwmon = d; break
+                except: pass
+            if hwmon:
+                for i, pt_data in enumerate(fan):
+                    pt = i + 1
+                    cmds.append(f"echo {pt_data[3]} > {hwmon}/pwm1_auto_point{pt}_pwm")
+                    cmds.append(f"echo {pt_data[3]} > {hwmon}/pwm2_auto_point{pt}_pwm")
+                    cmds.append(f"echo {pt_data[0]} > {hwmon}/pwm1_auto_point{pt}_temp")
+                    cmds.append(f"echo {pt_data[1]} > {hwmon}/pwm2_auto_point{pt}_temp")
+                    cmds.append(f"echo {pt_data[2]} > {hwmon}/pwm3_auto_point{pt}_temp")
+
+        if cmds: hw_write(" ; ".join(cmds))
+
     def update(self):
         try:
             self.cpu.set_subtitle(f"{int(self.m.cpu_temp.get()/1000)}°C | {self.m.fan1_rpm.get()} RPM")
@@ -662,14 +721,9 @@ class LegionApp(Adw.Application):
         self.mode_btn.set_visible(mode_val in ["255", "custom", "balanced-performance"])
         hw_write(f"echo {write_val} > {self.m.platform_profile.filename}")
     def on_batt(self, row, p):
-        self.lock_time = time.time() + 4.0; active = row.get_active()
-        if active:
-            if row == self.cons:
-                self.rapid.handler_block_by_func(self.on_batt); self.rapid.set_active(False); self.rapid.handler_unblock_by_func(self.on_batt)
-            else:
-                self.cons.handler_block_by_func(self.on_batt); self.cons.set_active(False); self.cons.handler_unblock_by_func(self.on_batt)
-        cons_v = 1 if self.cons.get_active() else 0; rapid_v = 1 if self.rapid.get_active() else 0
-        hw_write(f"echo 0 > {self.m.battery_conservation.filename} && echo 0 > {self.m.rapid_charging.filename} && echo {cons_v} > {self.m.battery_conservation.filename} && echo {rapid_v} > {self.m.rapid_charging.filename}")
+        self.lock_time = time.time() + 4.0
+        cons_v = 1 if self.cons.get_active() else 0
+        hw_write(f"echo {cons_v} > {self.m.battery_conservation.filename}")
     def on_custom_settings(self, btn): CustomSettingsWindow(self.get_active_window(), self.m).present()
 
 if __name__ == "__main__": sys.exit(LegionApp().run(sys.argv))

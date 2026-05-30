@@ -36,6 +36,17 @@ mkdir -p /opt/LenovoLOQLinux
 cp -r "$REPO_DIR/GTK4 UI" /opt/LenovoLOQLinux/
 cp -r "$REPO_DIR/python" /opt/LenovoLOQLinux/
 
+# Create hardware writer script
+cat << 'EOF' > /opt/LenovoLOQLinux/hw_write.sh
+#!/bin/bash
+eval "$1"
+EOF
+chmod +x /opt/LenovoLOQLinux/hw_write.sh
+
+# Setup passwordless sudo for hardware writer
+echo "ALL ALL=(ALL) NOPASSWD: /opt/LenovoLOQLinux/hw_write.sh" > /etc/sudoers.d/lenovoloq
+chmod 0440 /etc/sudoers.d/lenovoloq
+
 # Copy logo for desktop shortcut
 cp "$REPO_DIR/LOGO.jpeg" /usr/share/pixmaps/legion_logo.jpeg
 
@@ -63,6 +74,5 @@ echo " Installation Complete!                      "
 echo "============================================="
 echo ""
 echo " -> Launch 'Lenovo LOQ Control' from your application menu."
-echo " -> When applying settings, you will be prompted for your"
-echo "    sudo password via a system dialog (pkexec). This is normal."
 echo ""
+

@@ -40,6 +40,7 @@ echo "============================================="
 echo " Removing Desktop App GUI...                 "
 echo "============================================="
 rm -rf /opt/LenovoLOQLinux
+rm -f /etc/sudoers.d/lenovoloq
 rm -f /usr/share/pixmaps/legion_logo.jpeg
 rm -f /usr/share/applications/lenovoloq.desktop
 update-desktop-database /usr/share/applications 2>/dev/null || true

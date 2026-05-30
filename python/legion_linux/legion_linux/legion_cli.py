@@ -251,28 +251,6 @@ class AlwaysOnUsbCharging(CLIFeatureCommand):
         self.model.always_on_usb_charging.set(False)
         return 0
 
-
-class RapidCharging(CLIFeatureCommand):
-    def __init__(self, parser_subcommands, model: LegionModelFacade, cmd_group: list):
-        super().__init__("rapid-charging", parser_subcommands, cmd_group)
-        self.model = model
-
-    def exists(self) -> bool:
-        return self.model.rapid_charging.exists()
-
-    def command_status(self, **_) -> int:
-        print(self.model.rapid_charging.get())
-        return 0
-
-    def command_enable(self, **_) -> int:
-        self.model.rapid_charging.set(True)
-        return 0
-
-    def command_disable(self, **_) -> int:
-        self.model.rapid_charging.set(False)
-        return 0
-
-
 class HybridMode(CLIFeatureCommand):
     def __init__(self, parser_subcommands, model: LegionModelFacade, cmd_group: list):
         super().__init__("hybrid-mode", parser_subcommands, cmd_group)
@@ -479,7 +457,6 @@ def main():
     CameraPowerFeatureCommand(subcommands, None, cmd_group)
     OnPowerSupplyFeatureCommand(subcommands, None, cmd_group)
     AlwaysOnUsbCharging(subcommands, None, cmd_group)
-    RapidCharging(subcommands, None, cmd_group)
     HybridMode(subcommands, None, cmd_group)
 
     # only add autocompletion if package is installed

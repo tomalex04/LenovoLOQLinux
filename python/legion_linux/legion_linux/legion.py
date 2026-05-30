@@ -427,34 +427,16 @@ class LockFanController(BoolFileFeature):
 
 
 class BatteryConservation(BoolFileFeature):
-    def __init__(self, rapidcharging_feature):
+    def __init__(self):
         super().__init__(os.path.join(IDEAPAD_SYS_BASEPATH, 'conservation_mode'))
-        self.rapidcharging_feature = rapidcharging_feature
 
     def set(self, value):
-        # disable rapid charging when enabling battery conservation
-        if value and (self.rapidcharging_feature is not None) and self.rapidcharging_feature.exists():
-            self.rapidcharging_feature.set(False)
         return super().set(value)
 
     def set_if_not_set(self, value: bool) -> None:
         if value is not self.get():
             self.set(value)
         print(f"Already has value {value} - skip setting again.")
-
-
-class RapidChargingFeature(BoolFileFeature):
-    '''Rapid charging of laptop battery'''
-
-    def __init__(self, batterconservation_feature: BatteryConservation):
-        super().__init__(os.path.join(LEGION_SYS_BASEPATH, 'rapidcharge'))
-        self.batterconservation_feature = batterconservation_feature
-
-    def set(self, value):
-        # disable battery conservation when enabling rapid charging
-        if value and (self.batterconservation_feature is not None) and self.batterconservation_feature.exists():
-            self.batterconservation_feature.set(False)
-        return super().set(value)
 
 
 class FnLockFeature(BoolFileFeature):
@@ -1494,11 +1476,8 @@ class LegionModelFacade:
                                       0, 0, 0, 0, 0, 0, 0, 0, 0, 0) for i in range(10)],
                                   enable_minifancurve=False)
         self.lockfancontroller = LockFanController()
-        self.rapid_charging = RapidChargingFeature(None)
-        self.battery_conservation = BatteryConservation(None)
-        # fix this by resolving circular dependency by facade or similar
-        self.rapid_charging.batterconservation_feature = self.battery_conservation
-        self.battery_conservation.rapidcharging_feature = self.rapid_charging
+        self.battery_conservation = BatteryConservation()
+        # TODO: fix this by resolving circular dependency by facade or similar
         self.maximum_fanspeed = MaximumFanSpeedFeature()
         self.fn_lock = FnLockFeature()
         self.winkey = WinkeyFeature()
