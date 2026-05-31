@@ -2,7 +2,7 @@
     <strong> Lenovo LOQ Linux Support </strong>
 </h1>
 
-This project brings hardware-level tuning and custom power/thermal management specifically for the **Lenovo LOQ 15IAX9 (83GS)** laptop to Linux. It serves as an alternative to Lenovo Vantage, allowing granular control over power limits, temperature thresholds, and fan curves.
+This project brings hardware-level tuning and custom power/thermal management specifically for the **Lenovo LOQ 15IAX9 (83GS)** laptop to Linux. It serves as an alternative to Lenovo Vantage, allowing granular control over power limits, temperature thresholds, and fan curves. **I built this tool specifically because the mainline LenovoLegionLinux (LLL) project does not support this specific laptop model.**
 
 > **⚠️ CRITICAL DISCLAIMER ⚠️**
 > 
