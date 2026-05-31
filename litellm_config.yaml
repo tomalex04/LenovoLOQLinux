@@ -1,6 +1,0 @@
-model_list:
-  - model_name: gpt-5.5
-    litellm_params:
-      model: openai/antigravity-claude-sonnet-4-6
-      api_base: http://localhost:3000/v1
-      api_key: antigravity

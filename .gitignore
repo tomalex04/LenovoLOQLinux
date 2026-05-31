@@ -70,3 +70,31 @@ dist/
 extra/service/legiond/legiond
 extra/service/legiond/legiond-ctl
 extra/service/legiond/.cache/clangd
+
+# AI Assistant and IDE artifacts
+.commandcode/
+.gemini/
+.cursor/
+.cline/
+.aider*/
+scratch/
+implementation_plan.md
+task.md
+walkthrough.md
+
+# Patch and scratch files
+*.patch
+*.diff
+patch_*.py
+test_*.py
+fix*.py
+probe_*.py
+err.txt
+build.log
+what_to_do.txt
+litellm_config.yaml
+loq_15iax9_handover.md
+
+.antigravitycli/
+commands.txt
+gtk_err.txt
