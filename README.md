@@ -152,7 +152,7 @@ Settings are saved to `~/.config/legion_linux/profiles.json` and restored via "R
 | `kernel_module/Makefile` | Kernel module build |
 | `python/legion_linux/legion_linux/legion.py` | Python backend — `LegionModelFacade` wrapping every sysfs node |
 | `GTK4 UI/legion_gtk.py` | GTK4/Adwaita GUI application |
-| `HANDOVER.md` | Complete engineering handover — EC register map, architecture, known issues |
+
 | `requirements.txt` | Python dependencies |
 | `deploy/` | Build/packaging scripts (DKMS, PKGBUILD, .spec) |
 | `tests/` | Shell-based test scripts |
