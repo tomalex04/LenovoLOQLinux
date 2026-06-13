@@ -30,12 +30,12 @@ class FanCurveWidget(Gtk.DrawingArea):
     SNAP = [0, 43, 57, 71, 85, 100, 114, 128]
     MAX_PWM = 128
     _RPM_MAP = {0: 1400, 43: 1700, 57: 2300, 71: 2800, 85: 3400, 100: 4000, 114: 4500, 128: 5000}
-    # [cpu_temp, cpu_sensor_temp, gpu_temp, pwm_speed] — temps are static, pwm is drag-modifiable
+    # [cpu_temp, gpu_temp, pwm_speed] — temps are static, pwm is drag-modifiable
     DEFAULTS = [
-        [62, 50, 46,   0], [64, 52, 48,  43], [68, 56, 54,  57],
-        [72, 60, 60,  71], [76, 64, 66,  85], [80, 68, 72,  85],
-        [84, 72, 80, 100], [88, 76, 88, 114], [93, 81, 94, 114],
-        [98, 86, 99, 128]
+        [62, 46,   0], [64, 48,  43], [68, 54,  57],
+        [72, 60,  71], [76, 66,  85], [80, 72,  85],
+        [84, 80, 100], [88, 88, 114], [93, 94, 114],
+        [98, 99, 128]
     ]
 
     def __init__(self):
@@ -97,33 +97,33 @@ class FanCurveWidget(Gtk.DrawingArea):
         cr.move_to(ml + w - 40, mt + h + 50); cr.show_text("100 °C")
         cr.set_source_rgb(0.35, 0.35, 0.35); cr.set_line_width(3)
         for i, p in enumerate(self.points):
-            x, y = ml + (i * w / (N - 1)), mt + h - self.pwm_to_vis(p[3], h)
+            x, y = ml + (i * w / (N - 1)), mt + h - self.pwm_to_vis(p[2], h)
             if i == 0: cr.move_to(x, y)
             else: cr.line_to(x, y)
         cr.stroke()
         cr.set_source_rgba(0.35, 0.35, 0.35, 0.15)
         for i, p in enumerate(self.points):
-            x, y = ml + (i * w / (N - 1)), mt + h - self.pwm_to_vis(p[3], h)
+            x, y = ml + (i * w / (N - 1)), mt + h - self.pwm_to_vis(p[2], h)
             if i == 0: cr.move_to(x, y)
             else: cr.line_to(x, y)
         cr.line_to(ml + ((N - 1) * w / (N - 1)), mt + h); cr.line_to(ml, mt + h); cr.close_path(); cr.fill()
         for i, p in enumerate(self.points):
-            x, y = ml + (i * w / (N - 1)), mt + h - self.pwm_to_vis(p[3], h)
+            x, y = ml + (i * w / (N - 1)), mt + h - self.pwm_to_vis(p[2], h)
             cr.arc(x, y, 7, 0, 2 * math.pi)
             cr.set_source_rgb(1, 0.2, 0.2) if i == self.drag_idx else cr.set_source_rgb(0.2, 0.7, 1)
             cr.fill()
         cr.set_source_rgb(0.3, 0.3, 0.3); cr.set_line_width(1)
         for i, p in enumerate(self.points):
-            x, y = ml + (i * w / (N - 1)), mt + h - self.pwm_to_vis(p[3], h)
+            x, y = ml + (i * w / (N - 1)), mt + h - self.pwm_to_vis(p[2], h)
             cr.move_to(x, y + 7); cr.line_to(x, mt + h)
         cr.stroke()
 
         if self.hover_idx >= 0:
             p = self.points[self.hover_idx]
             px = ml + (self.hover_idx * w / (N - 1))
-            py = mt + h - self.pwm_to_vis(p[3], h)
-            rpm = self.rpm_for_pwm(p[3])
-            msg = f"P{self.hover_idx+1}: CPU={p[0]}°C Sensor={p[1]}°C GPU={p[2]}°C\nPWM={p[3]} ({rpm}RPM)"
+            py = mt + h - self.pwm_to_vis(p[2], h)
+            rpm = self.rpm_for_pwm(p[2])
+            msg = f"P{self.hover_idx+1}: CPU={p[0]}°C GPU={p[1]}°C\nPWM={p[2]} ({rpm}RPM)"
             lines = msg.split("\n")
             tw, th = 0, 0
             for ln in lines:
@@ -157,12 +157,12 @@ class FanCurveWidget(Gtk.DrawingArea):
         y_from_bottom = h - (sy + dy - mt)
         ns = self.vis_to_snap(y_from_bottom, h)
         # Push neighbours: drag up → push right neighbours up; drag down → push left neighbours down
-        self.points[self.drag_idx][3] = ns
+        self.points[self.drag_idx][2] = ns
         for j in range(self.drag_idx + 1, N):
-            if self.points[j][3] < ns: self.points[j][3] = ns
+            if self.points[j][2] < ns: self.points[j][2] = ns
             else: break  # stop at first point already above ns
         for j in range(self.drag_idx - 1, -1, -1):
-            if self.points[j][3] > ns: self.points[j][3] = ns
+            if self.points[j][2] > ns: self.points[j][2] = ns
             else: break  # stop at first point already below ns
         self.queue_draw()
 
@@ -175,7 +175,7 @@ class FanCurveWidget(Gtk.DrawingArea):
         found = -1
         for i, p in enumerate(self.points):
             px = 80 + (i * w / (N - 1))
-            py = 20 + h - self.pwm_to_vis(p[3], h)
+            py = 20 + h - self.pwm_to_vis(p[2], h)
             if math.sqrt((x-px)**2 + (y-py)**2) < 25:
                 found = i; break
         if found != self.hover_idx:
@@ -375,7 +375,7 @@ class CustomSettingsWindow(Adw.Window):
                     pt = i + 1
                     raw_pwm = int(open(os.path.join(hwmon, f"pwm1_auto_point{pt}_pwm")).read())
                     # Snap to nearest valid SNAP value so pwm_to_vis works correctly
-                    self.graph.points[i][3] = self.graph.snap(raw_pwm)
+                    self.graph.points[i][2] = self.graph.snap(raw_pwm)
                 self.graph.queue_draw()
         except: pass
 
@@ -427,7 +427,7 @@ class CustomSettingsWindow(Adw.Window):
         gtc = p.get("gpu_to_cpu_boost", 10)
         if gtc in gtc_items: self.gpu_to_cpu_boost.set_selected(gtc_items.index(gtc))
         fan = p.get("fan")
-        if fan and len(fan) >= 2 and len(fan[0]) >= 4 and hasattr(self, 'graph'):
+        if fan and len(fan) >= 2 and len(fan[0]) >= 3 and hasattr(self, 'graph'):
             self.graph.points = [list(pt) for pt in fan]
             self.graph.queue_draw()
 
@@ -581,11 +581,10 @@ class CustomSettingsWindow(Adw.Window):
         if hwmon and hasattr(self, 'graph'):
             for i, p in enumerate(self.graph.points):
                 pt = i + 1
-                cmds.append(f"echo {p[3]} > {hwmon}/pwm1_auto_point{pt}_pwm")
-                cmds.append(f"echo {p[3]} > {hwmon}/pwm2_auto_point{pt}_pwm")
+                cmds.append(f"echo {p[2]} > {hwmon}/pwm1_auto_point{pt}_pwm")
+                cmds.append(f"echo {p[2]} > {hwmon}/pwm2_auto_point{pt}_pwm")
                 cmds.append(f"echo {p[0]} > {hwmon}/pwm1_auto_point{pt}_temp")
-                cmds.append(f"echo {p[1]} > {hwmon}/pwm2_auto_point{pt}_temp")
-                cmds.append(f"echo {p[2]} > {hwmon}/pwm3_auto_point{pt}_temp")
+                cmds.append(f"echo {p[1]} > {hwmon}/pwm3_auto_point{pt}_temp")
 
         if cmds:
             hw_write(" ; ".join(cmds))
@@ -698,11 +697,10 @@ class LegionApp(Adw.Application):
             if hwmon:
                 for i, pt_data in enumerate(fan):
                     pt = i + 1
-                    cmds.append(f"echo {pt_data[3]} > {hwmon}/pwm1_auto_point{pt}_pwm")
-                    cmds.append(f"echo {pt_data[3]} > {hwmon}/pwm2_auto_point{pt}_pwm")
+                    cmds.append(f"echo {pt_data[2]} > {hwmon}/pwm1_auto_point{pt}_pwm")
+                    cmds.append(f"echo {pt_data[2]} > {hwmon}/pwm2_auto_point{pt}_pwm")
                     cmds.append(f"echo {pt_data[0]} > {hwmon}/pwm1_auto_point{pt}_temp")
-                    cmds.append(f"echo {pt_data[1]} > {hwmon}/pwm2_auto_point{pt}_temp")
-                    cmds.append(f"echo {pt_data[2]} > {hwmon}/pwm3_auto_point{pt}_temp")
+                    cmds.append(f"echo {pt_data[1]} > {hwmon}/pwm3_auto_point{pt}_temp")
 
         if cmds: hw_write(" ; ".join(cmds))
 
