@@ -1,4 +1,4 @@
-import sys, os, gi, subprocess, time, math, json, logging, glob
+import sys, os, gi, subprocess, time, math, json, logging, glob, threading
 gi.require_version('Gtk', '4.0'); gi.require_version('Adw', '1')
 from gi.repository import Gtk, Adw, GLib, Gio, Gdk
 
@@ -7,6 +7,52 @@ logging.getLogger('legion').setLevel(logging.WARNING)
 
 sys.path.insert(0, os.path.dirname(__file__) + "/../python/legion_linux")
 import legion_linux.legion as l
+
+# ---------------------------------------------------------------------------
+# Standalone temperature readers — same approach as legion_daemon.py
+# ---------------------------------------------------------------------------
+def _read_cpu_temp():
+    """Read CPU Package temp from coretemp hwmon. Returns °C int or None."""
+    try:
+        for d in sorted(glob.glob("/sys/class/hwmon/hwmon*")):
+            try:
+                with open(os.path.join(d, "name")) as f:
+                    name = f.read().strip()
+                if name not in ("coretemp", "k10temp", "zenpower"):
+                    continue
+                p = os.path.join(d, "temp1_input")
+                if os.path.exists(p):
+                    return int(open(p).read().strip()) // 1000
+                temps = []
+                for tf in glob.glob(os.path.join(d, "temp*_input")):
+                    try: temps.append(int(open(tf).read().strip()) // 1000)
+                    except: pass
+                if temps: return max(temps)
+            except: pass
+    except: pass
+    return None
+
+def _read_gpu_temp():
+    """Read GPU temp from hwmon or nvidia-smi. Returns °C int or None."""
+    try:
+        for d in sorted(glob.glob("/sys/class/hwmon/hwmon*")):
+            try:
+                with open(os.path.join(d, "name")) as f:
+                    name = f.read().strip()
+                if name in ("nouveau", "amdgpu", "nvidia"):
+                    p = os.path.join(d, "temp1_input")
+                    if os.path.exists(p):
+                        return int(open(p).read().strip()) // 1000
+            except: pass
+    except: pass
+    try:
+        out = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=temperature.gpu", "--format=csv,noheader,nounits"],
+            timeout=0.5
+        ).decode().strip()
+        return int(out)
+    except: pass
+    return None
 
 CONFIG_DIR = os.path.expanduser("~/.config/legion_linux")
 PROFILES_FILE = os.path.join(CONFIG_DIR, "profiles.json")
@@ -598,7 +644,22 @@ class CustomSettingsWindow(Adw.Window):
 
 
 class LegionApp(Adw.Application):
-    def __init__(self): super().__init__(application_id="com.github.legiontoolkit.gtk")
+    def __init__(self):
+        super().__init__(application_id="com.github.legiontoolkit.gtk")
+        # Cached temp values updated by background thread every 1 second
+        self._cpu_temp = None
+        self._gpu_temp = None
+        self._start_temp_thread()
+
+    def _start_temp_thread(self):
+        """Spin up a daemon thread that refreshes CPU/GPU temps every 1 second."""
+        def _poll():
+            while True:
+                self._cpu_temp = _read_cpu_temp()
+                self._gpu_temp = _read_gpu_temp()
+                time.sleep(1)
+        t = threading.Thread(target=_poll, daemon=True)
+        t.start()
     def do_activate(self):
         self.m = l.LegionModelFacade(expect_hwmon=True); self.lock_time = 0
         win = Adw.ApplicationWindow(application=self, title="Legion Toolkit", default_width=600)
@@ -705,10 +766,18 @@ class LegionApp(Adw.Application):
         if cmds: hw_write(" ; ".join(cmds))
 
     def update(self):
+        cpu_t = self._cpu_temp
+        gpu_t = self._gpu_temp
+        cpu_str = f"{cpu_t}°C" if cpu_t is not None else "--°C"
+        gpu_str = f"{gpu_t}°C" if gpu_t is not None else "--°C"
         try:
-            self.cpu.set_subtitle(f"{int(self.m.cpu_temp.get()/1000)}°C | {self.m.fan1_rpm.get()} RPM")
-            self.gpu.set_subtitle(f"{int(self.m.gpu_temp.get()/1000)}°C | {self.m.fan2_rpm.get()} RPM")
-        except: pass
+            self.cpu.set_subtitle(f"{cpu_str} | {self.m.fan1_rpm.get()} RPM")
+        except:
+            self.cpu.set_subtitle(cpu_str)
+        try:
+            self.gpu.set_subtitle(f"{gpu_str} | {self.m.fan2_rpm.get()} RPM")
+        except:
+            self.gpu.set_subtitle(gpu_str)
         return True
     def on_mode(self, row, p):
         self.lock_time = time.time() + 4.0; sel = row.get_selected()
