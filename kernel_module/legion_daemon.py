@@ -50,17 +50,30 @@ def find_hwmon():
     return None
 
 def get_cpu_temp():
-    """Read current CPU package temp in degrees C."""
+    """Read current CPU package temp in degrees C.
+    Uses Package id 0 (temp1_input) on coretemp which is the highest-level sensor.
+    Falls back to max across all visible core inputs if package is not found.
+    """
     try:
         for d in sorted(glob.glob("/sys/class/hwmon/hwmon*")):
             try:
                 with open(os.path.join(d, "name")) as f:
                     name = f.read().strip()
-                if name in ("coretemp", "k10temp", "zenpower"):
-                    # try temp1_input (package/die temp)
-                    p = os.path.join(d, "temp1_input")
-                    if os.path.exists(p):
-                        return int(open(p).read().strip()) // 1000
+                if name not in ("coretemp", "k10temp", "zenpower"):
+                    continue
+                # Prefer Package id 0 (temp1_input on coretemp)
+                p = os.path.join(d, "temp1_input")
+                if os.path.exists(p):
+                    return int(open(p).read().strip()) // 1000
+                # Fallback: max across all tempN_input in this hwmon
+                temps = []
+                for tf in glob.glob(os.path.join(d, "temp*_input")):
+                    try:
+                        temps.append(int(open(tf).read().strip()) // 1000)
+                    except:
+                        pass
+                if temps:
+                    return max(temps)
             except:
                 pass
     except:
@@ -68,7 +81,9 @@ def get_cpu_temp():
     return None
 
 def get_gpu_temp():
-    """Read current GPU temp in degrees C via hwmon."""
+    """Read current GPU temp in degrees C.
+    Tries hwmon first (nouveau/amdgpu/nvidia), then nvidia-smi as fallback.
+    """
     try:
         for d in sorted(glob.glob("/sys/class/hwmon/hwmon*")):
             try:
@@ -80,11 +95,14 @@ def get_gpu_temp():
                         return int(open(p).read().strip()) // 1000
             except:
                 pass
-        # fallback: nvidia-smi
+    except:
+        pass
+    # Fallback: nvidia-smi (short timeout to not stall the 1s polling loop)
+    try:
         import subprocess
         out = subprocess.check_output(
             ["nvidia-smi", "--query-gpu=temperature.gpu", "--format=csv,noheader,nounits"],
-            timeout=1
+            timeout=0.5
         ).decode().strip()
         return int(out)
     except:
@@ -178,22 +196,10 @@ def apply_custom_preset():
         if "max_fan" in custom: write_sysfs("maximum_fanspeed", 1 if custom["max_fan"] else 0)
         if "tau" in custom: write_sysfs("cpu_pl1_tau", custom["tau"])
 
-        # Write fan curve trigger temps to hwmon (static curve registration)
-        fan = custom.get("fan")
-        if fan:
-            hwmon = find_hwmon()
-            if hwmon:
-                for i, pt_data in enumerate(fan):
-                    pt = i + 1
-                    try:
-                        # pt_data = [cpu_temp, gpu_temp, pwm]
-                        with open(f"{hwmon}/pwm1_auto_point{pt}_pwm", "w") as f: f.write(str(pt_data[2]))
-                        with open(f"{hwmon}/pwm2_auto_point{pt}_pwm", "w") as f: f.write(str(pt_data[2]))
-                        with open(f"{hwmon}/pwm1_auto_point{pt}_temp", "w") as f: f.write(str(pt_data[0]))
-                        with open(f"{hwmon}/pwm3_auto_point{pt}_temp", "w") as f: f.write(str(pt_data[1]))
-                    except Exception as e:
-                        logging.error(f"  -> Error writing fan curve point {pt}: {e}")
-                logging.info("  -> Set fan curve via hwmon")
+        # NOTE: Fan curve is NOT written to EC auto_point registers here.
+        # The real-time polling loop owns all fan control in custom mode.
+        # Writing auto_point temps to the EC would create a second hardware
+        # controller that fights with our software loop and ramps fans early.
 
         logging.info("Custom preset applied successfully.")
         return custom.get("fan")  # return fan points for the temp-polling loop
