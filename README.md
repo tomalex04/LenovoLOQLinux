@@ -2,7 +2,9 @@
     <strong> Lenovo LOQ Linux (15IAX9) - Fan Control & Power Management </strong>
 </h1>
 
-This project brings hardware-level tuning and custom power/thermal management specifically for the Lenovo LOQ 15IAX9 (Intel i5-12450HX / RTX 3050) laptop to Linux. It serves as an alternative to Lenovo Vantage, allowing granular control over power limits, temperature thresholds, and fan curves on CachyOS, Ubuntu, and other modern distributions. **I built this tool specifically because the mainline LenovoLegionLinux (LLL) project does not support this specific laptop model.**
+This project brings hardware-level tuning, custom power/thermal management, and a robust software-controlled fan curve specifically to the **Lenovo LOQ 15IAX9 (Intel i5-12450HX / RTX 3050)** laptop on Linux. It serves as a fully independent alternative to Lenovo Vantage, providing granular control over power limits, temperature thresholds, and fan curves on CachyOS, Ubuntu, and other modern distributions. 
+
+**This is a dedicated, standalone project for the LOQ 15IAX9.** It was built from the ground up because the mainline `LenovoLegionLinux` project fundamentally lacks support for this laptop model. It features heavily re-engineered fan control logic, a custom background daemon that overrides the laptop's Embedded Controller (EC) to prevent premature fan ramping, and a tailored GTK4 user interface.
 
 > **⚠️ CRITICAL DISCLAIMER ⚠️**
 > 
@@ -32,16 +34,14 @@ This project brings hardware-level tuning and custom power/thermal management sp
 
 ### ✅ Fan Curve — Working on LOQ 15IAX9
 
-Writes to EC staging registers (0xCF00+, stride 6) via hwmon sysfs. The EC commit at `0xCFB6` bit 4 copies staging→active. PWM range is 0–255, but EC firmware caps at effective PWM 40 (1700 RPM minimum) and PWM 128 (5000 RPM maximum). Values above 128 produce no additional RPM.
-
-- **8-point interactive Cairo graph** with drag points and hover tooltips showing CPU/GPU temp triggers + exact RPM
+- **Real-Time Software Override Daemon**: Because the LOQ 15IAX9 Embedded Controller (EC) interpolates hardware fan curves poorly (causing premature fan ramping), this project ships with a custom background daemon (`legiond`). It polls CPU/GPU temperatures every 1 second and mathematically enforces a strict step-function lookup against your saved fan curve, actively flattening the hardware curve on the fly to guarantee exact RPM targets.
+- **Hardware Thermal Failsafe**: Even though the daemon overrides the EC dynamically, it explicitly reserves the 10th hardware curve point to force 100% fan speed at 95°C. This ensures that if the daemon ever crashes while fans are off, the hardware will safely take over to prevent overheating.
+- **8-point interactive Cairo graph** with drag points and hover tooltips showing CPU/GPU temp triggers + exact RPM.
 - **8 Y-axis snap values** with measured PWM→RPM mapping:
-  - PWM 0 → 1400 RPM, 43 → 1700, 57 → 2300, 71 → 2800, 85 → 3400, 100 → 4000, 114 → 4500, 128 → 5000
-- Monotonically enforced (points can't drop below previous)
-- X-axis: CPU temp trigger per point (°C)
-- Y-axis: fan speed in PWM (0–128)
-- First point at PWM 40 (EC minimum ~1700 RPM)
-- Saved/restored with presets
+  - PWM 0 → 0 RPM, 43 → 1700, 57 → 2300, 71 → 2800, 85 → 3400, 100 → 4000, 114 → 4500, 128 → 5000.
+- Monotonically enforced (points can't drop below previous).
+- First point at PWM 40 (EC minimum ~1700 RPM when active).
+- Saved/restored with presets.
 
 ### ✅ Maximum Fan Speed Toggle
 
@@ -57,7 +57,7 @@ Writes to EC staging registers (0xCF00+, stride 6) via hwmon sysfs. The EC commi
 - **Delete Presets** — Remove presets via the trash icon.
 - **Switch Presets** — Load any saved preset from the dropdown. Unsaved changes are discarded on switch.
 - **Persist on Save** — Changes are saved to the active preset only when you click "Save" or "Save & Close". Switching presets without saving discards unsaved changes.
-- **Auto-Apply Daemon (legiond.service)** — A background system service that monitors power mode changes (Fn+Q or UI). When Custom mode is activated, it automatically reads your last "Saved & Closed" profile and reapplies all settings to the hardware.
+- **Auto-Apply Daemon (`legiond.service`)** — A background system service that monitors power mode changes (Fn+Q or UI). When Custom mode is activated, it automatically reads your last "Saved & Closed" profile, reapplies all hardware settings, and initiates the 1-second temperature polling loop to control the fans.
 
 ## ⚠️ Known Limitations
 
@@ -171,7 +171,7 @@ Settings are saved to `~/.config/legion_linux/profiles.json` and restored via "R
 
 ## :pray: Thanks
 
-This project is built on top of **[LenovoLegionLinux](https://github.com/johnfanv2/LenovoLegionLinux)** by johnfanv2 — the original kernel driver that reverse-engineered the EC communication, WMI methods, and fan curve control for Lenovo Legion laptops. Without that foundational work, this LOQ 15IAX9 adaptation would not exist.
+While this is a fully independent and heavily modified project dedicated exclusively to the LOQ 15IAX9, credit goes to **[LenovoLegionLinux](https://github.com/johnfanv2/LenovoLegionLinux)** by johnfanv2 for the initial reverse engineering of Lenovo's EC communication and WMI methods. Because that project did not (and could not easily) support this specific laptop, I used their underlying reverse-engineered driver code as an architectural starting point before heavily adapting, stripping, and rebuilding it to create this dedicated LOQ 15IAX9 tool.
 
 ## :scroll: License
 
