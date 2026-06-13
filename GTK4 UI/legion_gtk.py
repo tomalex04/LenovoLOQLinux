@@ -143,7 +143,7 @@ class FanCurveWidget(Gtk.DrawingArea):
         ml, mt = 80, 20
         w, h = self.get_width() - ml - 20, self.get_height() - mt - 70
         for i, p in enumerate(self.points):
-            px, py = ml + (i * w / (N - 1)), mt + h - self.pwm_to_vis(p[3], h)
+            px, py = ml + (i * w / (N - 1)), mt + h - self.pwm_to_vis(p[2], h)
             if math.sqrt((x-px)**2 + (y-py)**2) < 25:
                 self.drag_idx = i; self.queue_draw(); return
 
