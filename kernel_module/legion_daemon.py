@@ -135,13 +135,29 @@ def fan_curve_pwm(fan_points, cpu_temp, gpu_temp):
     return max(pwm_cpu, pwm_gpu)
 
 def write_fan_pwm(hwmon, pwm):
-    """Write a single PWM value to both fan channels."""
+    """Write a single PWM value to both fan channels by flattening the hardware curve.
+    Since direct 'pwm1' control isn't exposed by the driver, we enforce our software
+    polling loop's computed PWM by setting hardware auto_points 1-9 to it.
+    We set point 10 to max speed at 95°C as a hardware thermal failsafe in case the daemon crashes.
+    """
     try:
-        for ch in ("pwm1", "pwm2"):
-            p = os.path.join(hwmon, ch)
-            if os.path.exists(p):
-                with open(p, "w") as f:
-                    f.write(str(pwm))
+        for ch in (1, 2, 3):
+            # Points 1-9: Flatten to target PWM up to 90C
+            for pt in range(1, 10):
+                p = os.path.join(hwmon, f"pwm{ch}_auto_point{pt}_pwm")
+                t = os.path.join(hwmon, f"pwm{ch}_auto_point{pt}_temp")
+                if os.path.exists(p):
+                    with open(p, "w") as f: f.write(str(pwm))
+                if os.path.exists(t):
+                    with open(t, "w") as f: f.write("90")
+            
+            # Point 10: Thermal failsafe (128 PWM = ~5000 RPM at 95C)
+            p10 = os.path.join(hwmon, f"pwm{ch}_auto_point10_pwm")
+            t10 = os.path.join(hwmon, f"pwm{ch}_auto_point10_temp")
+            if os.path.exists(p10):
+                with open(p10, "w") as f: f.write("128")
+            if os.path.exists(t10):
+                with open(t10, "w") as f: f.write("95")
     except Exception as e:
         logging.error(f"Error writing fan PWM: {e}")
 
