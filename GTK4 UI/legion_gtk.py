@@ -476,6 +476,9 @@ class CustomSettingsWindow(Adw.Window):
         if fan and len(fan) >= 2 and len(fan[0]) >= 3 and hasattr(self, 'graph'):
             self.graph.points = [list(pt) for pt in fan]
             self.graph.queue_draw()
+        elif hasattr(self, 'graph'):
+            self.graph.points = [list(pt) for pt in FanCurveWidget.DEFAULTS]
+            self.graph.queue_draw()
 
     def on_add_preset(self):
         """Ask for name, then save current settings as a new preset."""
@@ -747,6 +750,8 @@ class LegionApp(Adw.Application):
         if "tau" in p: add_cmd("cpu_pl1_tau", p["tau"])
         
         fan = p.get("fan")
+        if not fan:
+            fan = FanCurveWidget.DEFAULTS
         if fan:
             hwmon = None
             for d in sorted(glob.glob("/sys/class/hwmon/hwmon*")):
