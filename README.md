@@ -29,8 +29,6 @@ This project brings hardware-level tuning, custom power/thermal management, and 
 - **Long Term Power Limit (Cross Loading)** — 25W–55W. CPU limit when GPU is active. Enforced natively.
 - **Total Processor Power Target In AC** — 10W–70W. GPU→CPU dynamic power adjustment threshold. Enforced natively.
 
-### ⚠️ WMI-Verified (Requires Windows Services for Enforcement)
-- **GPU Temperature Limit** — 75°C–87°C. WMI writes succeed with exact UI mapping to sysfs, but hardware enforcement may require Windows Vantage services.
 
 ### ✅ Fan Curve — Working on LOQ 15IAX9
 
@@ -136,7 +134,7 @@ Hardware writes use `pkexec` to prompt for elevation only when needed.
 - **Custom Mode (gear icon):** Only visible when Custom/Balanced-Performance mode is active.
   - **Read from HW:** Sync sliders with current hardware values.
   - **CPU Section:** PL1, PL2, Tau, Cross Loading, CPU Temperature Limit.
-  - **GPU Section:** Dynamic Boost, Configurable TGP, GPU Temperature Limit, Total AC.
+  - **GPU Section:** Dynamic Boost, Configurable TGP, Total AC.
   - **Fan Section:** Interactive 10-point fan curve graph, fan curve reset, maximum fan speed toggle.
   - **Save / Save & Close:** Apply settings to hardware with safety confirmation dialog.
 - **Factory Reset:** Press `Fn+Q` to instantly revert to BIOS factory defaults.

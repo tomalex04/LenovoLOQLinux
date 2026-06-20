@@ -205,7 +205,7 @@ def apply_custom_preset():
         if "cross_load" in custom: write_sysfs("cpu_cross_loading_power_limit", custom["cross_load"])
         if "peak" in custom: write_sysfs("cpu_peak_power_limit", custom["peak"])
         if "cpu_temp" in custom: write_sysfs("cpu_temperature_limit", custom["cpu_temp"])
-        if "gpu_temp" in custom: write_sysfs("gpu_temperature_limit", custom["gpu_temp"])
+
         if "dyn_boost" in custom: write_sysfs("gpu_ppab_power_limit", custom["dyn_boost"])
         if "ctgp" in custom: write_sysfs("gpu_ctgp_power_limit", custom["ctgp"])
         if "gpu_to_cpu_boost" in custom: write_sysfs("gpu_to_cpu_dynamic_boost", custom["gpu_to_cpu_boost"])

@@ -290,8 +290,7 @@ class CustomSettingsWindow(Adw.Window):
         self.ctgp = self.add_combo(gpu_group, "Configurable TGP",
             ["60 W", "65 W", "70 W", "75 W", "80 W"],
             "The additional amount of power that can be allocated to the GPU on top of base power consumption.")
-        self.gpu_temp = self.add_slider(gpu_group, "GPU Temperature Limit", 75, 87, " °C",
-            "The maximum temperature that can be reached by the GPU before frequency and power is reduced.")
+
         self.total_ac = self.add_slider(gpu_group, "Total Processor Power Target In AC", 10, 70, " W",
             "The point at which the CPU triggers dynamic power consumption adjustment for the GPU.")
         self.gpu_to_cpu_boost = self.add_combo(gpu_group, "GPU to CPU Dynamic Boost",
@@ -393,10 +392,7 @@ class CustomSettingsWindow(Adw.Window):
             ctgp_items = [60, 65, 70, 75, 80]
             if val in ctgp_items: self.ctgp.set_selected(ctgp_items.index(val))
         except: pass
-        try:
-            raw = int(self.m.gpu_temperature_limit.get())
-            self.gpu_temp.set_value(raw)
-        except: pass
+
         try: self.max_fan.set_active(self.m.maximum_fanspeed.get())
         except: pass
         # GPU to CPU Dynamic Boost dropdown: values 0, 5, 10, 15 → indices 0-3
@@ -466,7 +462,7 @@ class CustomSettingsWindow(Adw.Window):
         ctgp_items = [60, 65, 70, 75, 80]
         ct = p.get("ctgp", 80)
         if ct in ctgp_items: self.ctgp.set_selected(ctgp_items.index(ct))
-        self.gpu_temp.set_value(p.get("gpu_temp", 87))
+
         self.max_fan.set_active(p.get("max_fan", False))
         # GPU to CPU Dynamic Boost
         gtc_items = [0, 5, 10, 15]
@@ -554,7 +550,6 @@ class CustomSettingsWindow(Adw.Window):
             "tau": tau_vals[self.pl2_duration.get_selected()],
             "dyn_boost": [5,10,15][self.dyn_boost.get_selected()],
             "ctgp": [60,65,70,75,80][self.ctgp.get_selected()],
-            "gpu_temp": int(self.gpu_temp.get_value()),
             "cpu_temp": int(self.cpu_temp.get_value()),
             "gpu_to_cpu_boost": [0,5,10,15][self.gpu_to_cpu_boost.get_selected()],
             "fan": [list(p) for p in self.graph.points] if hasattr(self, 'graph') else []
@@ -600,7 +595,6 @@ class CustomSettingsWindow(Adw.Window):
             add_cmd(attr_name, int(slider.get_value()))
             
         add_cmd("cpu_temperature_limit", int(self.cpu_temp.get_value()))
-        add_cmd("gpu_temperature_limit", int(self.gpu_temp.get_value()))
 
         # Dynamic Boost
         add_cmd("gpu_ppab_power_limit",
@@ -742,7 +736,7 @@ class LegionApp(Adw.Application):
         if "cross_load" in p: add_cmd("cpu_cross_loading_power_limit", p["cross_load"])
         if "peak" in p: add_cmd("cpu_peak_power_limit", p["peak"])
         if "cpu_temp" in p: add_cmd("cpu_temperature_limit", p["cpu_temp"])
-        if "gpu_temp" in p: add_cmd("gpu_temperature_limit", p["gpu_temp"])
+
         if "dyn_boost" in p: add_cmd("gpu_ppab_power_limit", p["dyn_boost"])
         if "ctgp" in p: add_cmd("gpu_ctgp_power_limit", p["ctgp"])
         if "gpu_to_cpu_boost" in p: add_cmd("gpu_to_cpu_dynamic_boost", p["gpu_to_cpu_boost"])

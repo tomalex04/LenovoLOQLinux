@@ -635,9 +635,7 @@ class GPUToCPUDynamicBoost(IntFileFeature):
         super().set(value)
 
 
-class GPUTemperatureLimit(IntFileFeature):
-    def __init__(self):
-        super().__init__(os.path.join(LEGION_SYS_BASEPATH, "gpu_temperature_limit"), 0, 120, 1)
+
 
 
 class YLogoLight(BoolFileFeature):
@@ -1505,7 +1503,6 @@ class LegionModelFacade:
         self.gpu_ctgp_power_limit = GPUCTGPPowerLimit()
         self.gpu_ppab_power_limit = GPUPPABPowerLimit()
         self.gpu_to_cpu_dynamic_boost = GPUToCPUDynamicBoost()
-        self.gpu_temperature_limit = GPUTemperatureLimit()
         self.cpu_temperature_limit = CPUTemperatureLimit()
         self.cpu_pl1_tau = CPUPL1Tau()
         self.cpu_temp = CPUTemperature()

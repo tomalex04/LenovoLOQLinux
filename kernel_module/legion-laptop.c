@@ -192,7 +192,6 @@ struct ec_register_offsets {
 	u16 EXT_GPU_TEMP_INPUT;
 
 	// LOQ 15IAX9 power limit EC registers (discovered via /dev/mem)
-	u16 EXT_GPU_TEMPERATURE_LIMIT;
 	u16 EXT_CPU_CROSS_LOAD_POWER_LIMIT;
 	u16 EXT_CPU_LONG_TERM_POWER_LIMIT;
 	u16 EXT_CPU_SHORT_TERM_POWER_LIMIT;
@@ -442,7 +441,6 @@ static const struct ec_register_offsets ec_register_offsets_loq_v0 = {
 	.EXT_WHITE_KEYBOARD_BACKLIGHT = 0xC5a0, // not found yet
 
 	// Power limit EC registers (discovered via /dev/mem EC dump)
-	.EXT_GPU_TEMPERATURE_LIMIT = 0xC4EA,
 	.EXT_CPU_CROSS_LOAD_POWER_LIMIT = 0xC4F0,
 	.EXT_CPU_LONG_TERM_POWER_LIMIT = 0xC4F2,
 	.EXT_CPU_SHORT_TERM_POWER_LIMIT = 0xC4F4,
@@ -1909,9 +1907,7 @@ enum IGPUState {
 #define WMI_METHOD_ID_GPU_SET_CTGP_POWERLIMIT 6
 // ppab/ctgp powerlimit
 #define WMI_METHOD_ID_GPU_GET_DEFAULT_PPAB_CTGP_POWERLIMIT 7
-// temperature limit
-#define WMI_METHOD_ID_GPU_GET_TEMPERATURE_LIMIT 8
-#define WMI_METHOD_ID_GPU_SET_TEMPERATURE_LIMIT 9
+
 // boost clock
 #define WMI_METHOD_ID_GPU_GET_BOOST_CLOCK 10
 
@@ -1964,7 +1960,6 @@ enum OtherMethodFeature {
 
 	OtherMethodFeature_GPU_POWER_BOOST = 0x02010000,
 	OtherMethodFeature_GPU_cTGP = 0x02020000,
-	OtherMethodFeature_GPU_TEMPERATURE_LIMIT = 0x02030000,
 	/*
 	 * GPU→CPU Dynamic Boost ("GPU to CPU Dynamic Boost" in Lenovo Vantage).
 	 * CONFIRMED via wmi_probe.ko (2025-05-24): this is the only feature ID
@@ -5102,46 +5097,6 @@ gpu_default_ppab_ctrgp_powerlimit_show(struct device *dev,
 }
 static DEVICE_ATTR_RO(gpu_default_ppab_ctrgp_powerlimit);
 
-static ssize_t gpu_temperature_limit_show(struct device *dev,
-					  struct device_attribute *attr,
-					  char *buf)
-{
-	struct legion_private *priv = dev_get_drvdata(dev);
-	int val;
-	/* EC first (known working read) */
-	if (!ec_read_power_limit_16(priv,
-		priv->conf->registers->EXT_GPU_TEMPERATURE_LIMIT, &val))
-		return sysfs_emit(buf, "%d\n", val);
-	/* WMI fallback */
-	return show_simple_wmi_attribute(dev, attr, buf,
-		WMI_GUID_LENOVO_GPU_METHOD, 0,
-		WMI_METHOD_ID_GPU_GET_TEMPERATURE_LIMIT, false, 1);
-}
-
-static ssize_t gpu_temperature_limit_store(struct device *dev,
-					   struct device_attribute *attr,
-					   const char *buf, size_t count)
-{
-	struct legion_private *priv = dev_get_drvdata(dev);
-	int val, ret, wmi_out;
-	ret = kstrtoint(buf, 0, &val);
-	if (ret)
-		return ret;
-	/* WMI Other Method first — what Vantage uses */
-	if (!wmi_other_method_set_value(OtherMethodFeature_GPU_TEMPERATURE_LIMIT, val, &wmi_out))
-		goto ec_sync;
-	/* Simple WMI fallback */
-	if (store_simple_wmi_attribute(dev, attr, buf, count,
-		WMI_GUID_LENOVO_GPU_METHOD, 0,
-		WMI_METHOD_ID_GPU_SET_TEMPERATURE_LIMIT, false, 1) > 0)
-		goto ec_sync;
-ec_sync:
-	ec_write_power_limit_16(priv,
-		priv->conf->registers->EXT_GPU_TEMPERATURE_LIMIT, val);
-	return count;
-}
-
-static DEVICE_ATTR_RW(gpu_temperature_limit);
 
 /*
  * gpu_to_cpu_dynamic_boost — GPU→CPU reverse power shifting.
@@ -5411,7 +5366,6 @@ static struct attribute *legion_sysfs_attributes[] = {
 	&dev_attr_gpu_ctgp_powerlimit.attr,
 	&dev_attr_gpu_ctgp2_powerlimit.attr,
 	&dev_attr_gpu_default_ppab_ctrgp_powerlimit.attr,
-	&dev_attr_gpu_temperature_limit.attr,
 	&dev_attr_gpu_to_cpu_dynamic_boost.attr,
 	&dev_attr_gpu_boost_clock.attr,
 	&dev_attr_fan_fullspeed.attr,
