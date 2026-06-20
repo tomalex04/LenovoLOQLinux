@@ -60,8 +60,7 @@ This project brings hardware-level tuning, custom power/thermal management, and 
 ## ⚠️ Known Limitations
 
 
-**GPU Temp Limit (Unenforced on Linux):**
-This setting is a Windows-managed policy. The WMI/EC writes succeed and the value persists correctly to the hardware memory, but the actual enforcement of this threshold requires the proprietary Lenovo Vantage services running in the background. It will not clamp power on Linux.
+
 
 **Single-Model Support:**
 The kernel module has been stripped to support ONLY the LOQ 15IAX9 (NECN BIOS). All other laptop model configurations have been removed.
