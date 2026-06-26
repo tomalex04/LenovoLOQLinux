@@ -55,7 +55,7 @@ This project brings hardware-level tuning, custom power/thermal management, and 
 - **Delete Presets** — Remove presets via the trash icon.
 - **Switch Presets** — Load any saved preset from the dropdown. Unsaved changes are discarded on switch.
 - **Persist on Save** — Changes are saved to the active preset only when you click "Save" or "Save & Close". Switching presets without saving discards unsaved changes.
-- **Auto-Apply Daemon (`legiond.service`)** — A background system service that monitors power mode changes (Fn+Q or UI). When Custom mode is activated, it automatically reads your last "Saved & Closed" profile, reapplies all hardware settings, and initiates the 1-second temperature polling loop to control the fans.
+- **Auto-Apply on Fn+Q (`legiond.service`)** — A background system service that monitors power mode changes (Fn+Q or GUI). When Custom mode is activated — regardless of whether the app is running — it automatically reads your last "Save & Close" profile, reapplies all power limits, thermal limits, and fan curve settings to hardware, and initiates the 1-second temperature polling loop to control the fans.
 
 ## ⚠️ Known Limitations
 
@@ -86,7 +86,7 @@ sudo dnf install -y \
 sudo dnf groupinstall "Development Tools"
 ```
 
-### Arch / Manjaro
+### Arch / CachyOS / Manjaro
 ```bash
 sudo pacman -S \
     linux-headers base-devel lm_sensors gtk4 libadwaita dkms \

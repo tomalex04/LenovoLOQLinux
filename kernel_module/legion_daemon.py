@@ -25,7 +25,14 @@ def find_profiles_file():
     return os.path.expanduser("~/.config/legion_linux/profiles.json")
 
 PROFILES_FILE = find_profiles_file()
-SYSFS_BASE = "/sys/bus/platform/devices/PNP0C09:00"
+
+# Resolve the correct Legion sysfs base path — mirrors legion.py logic.
+_kernel_ver = tuple(map(int, os.uname().release.split('-')[0].split('.')))
+if _kernel_ver >= (7, 0, 0):
+    SYSFS_BASE = '/sys/module/legion_laptop/drivers/platform:legion/legion'
+else:
+    SYSFS_BASE = '/sys/module/legion_laptop/drivers/platform:legion/PNP0C09:00'
+
 PROFILE_PATH = "/sys/firmware/acpi/platform_profile"
 
 if not os.path.exists(PROFILE_PATH):
@@ -188,29 +195,42 @@ def apply_custom_preset():
 
         logging.info("Applying custom preset...")
 
-        def write_sysfs(attr_name, value):
-            path = os.path.join(SYSFS_BASE, attr_name)
-            if os.path.exists(path):
-                try:
-                    with open(path, "w") as sf:
-                        sf.write(str(value))
-                    logging.info(f"  -> Set {attr_name} to {value}")
-                except Exception as e:
-                    logging.error(f"  -> Error writing {attr_name}: {e}")
-            else:
-                logging.warning(f"  -> Sysfs node not found: {path}")
+        # Map profile JSON keys -> sysfs glob patterns under SYSFS_BASE.
+        # Using glob (*) handles both `_powerlimit` and `_power_limit` spellings
+        # across kernel versions without any branching.
+        KEY_TO_GLOB = {
+            "pl1":              "cpu_longterm_power*limit",
+            "pl2":              "cpu_shortterm_power*limit",
+            "cross_load":       "cpu_cross_loading_power*limit",
+            "peak":             "cpu_peak_power*limit",
+            "cpu_temp":         "cpu_temperature_limit",
+            "dyn_boost":        "gpu_ppab_power*limit",
+            "ctgp":             "gpu_ctgp_power*limit",
+            "gpu_to_cpu_boost": "gpu_to_cpu_dynamic_boost",
+            "max_fan":          "fan_fullspeed",
+            "tau":              "cpu_pl1_tau",
+        }
 
-        if "pl1" in custom: write_sysfs("cpu_longterm_power_limit", custom["pl1"])
-        if "pl2" in custom: write_sysfs("cpu_shortterm_power_limit", custom["pl2"])
-        if "cross_load" in custom: write_sysfs("cpu_cross_loading_power_limit", custom["cross_load"])
-        if "peak" in custom: write_sysfs("cpu_peak_power_limit", custom["peak"])
-        if "cpu_temp" in custom: write_sysfs("cpu_temperature_limit", custom["cpu_temp"])
+        def write_sysfs(pattern, value):
+            matches = glob.glob(os.path.join(SYSFS_BASE, pattern))
+            if not matches:
+                logging.warning(f"  -> Sysfs node not found: {SYSFS_BASE}/{pattern}")
+                return
+            path = matches[0]
+            try:
+                with open(path, "w") as sf:
+                    sf.write(str(value))
+                logging.info(f"  -> Set {os.path.basename(path)} to {value}")
+            except Exception as e:
+                logging.error(f"  -> Error writing {path}: {e}")
 
-        if "dyn_boost" in custom: write_sysfs("gpu_ppab_power_limit", custom["dyn_boost"])
-        if "ctgp" in custom: write_sysfs("gpu_ctgp_power_limit", custom["ctgp"])
-        if "gpu_to_cpu_boost" in custom: write_sysfs("gpu_to_cpu_dynamic_boost", custom["gpu_to_cpu_boost"])
-        if "max_fan" in custom: write_sysfs("maximum_fanspeed", 1 if custom["max_fan"] else 0)
-        if "tau" in custom: write_sysfs("cpu_pl1_tau", custom["tau"])
+        for key, pattern in KEY_TO_GLOB.items():
+            if key not in custom:
+                continue
+            val = custom[key]
+            if key == "max_fan":
+                val = 1 if val else 0
+            write_sysfs(pattern, val)
 
         # NOTE: Fan curve is NOT written to EC auto_point registers here.
         # The real-time polling loop owns all fan control in custom mode.

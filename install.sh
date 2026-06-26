@@ -51,7 +51,7 @@ chmod 0440 /etc/sudoers.d/lenovoloq
 cp "$REPO_DIR/LOGO.jpeg" /usr/share/pixmaps/legion_logo.jpeg
 
 # Create .desktop entry so the app appears in the application menu
-cat << 'EOF' > /usr/share/applications/lenovoloq.desktop
+cat << EOF > /usr/share/applications/lenovoloq.desktop
 [Desktop Entry]
 Name=Lenovo LOQ Control
 Comment=Power and Thermal Management for Lenovo LOQ 15IAX9
