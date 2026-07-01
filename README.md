@@ -33,12 +33,13 @@ This project brings hardware-level tuning, custom power/thermal management, and 
 ### ✅ Fan Curve — Working on LOQ 15IAX9
 
 - **Real-Time Software Override Daemon**: Because the LOQ 15IAX9 Embedded Controller (EC) interpolates hardware fan curves poorly (causing premature fan ramping), this project ships with a custom background daemon (`legiond`). It polls CPU/GPU temperatures every 1 second and mathematically enforces a strict step-function lookup against your saved fan curve, actively flattening the hardware curve on the fly to guarantee exact RPM targets.
+- **OR Trigger Logic**: Reaching **either** the CPU *or* GPU temperature threshold for any curve point is sufficient to trigger that fan speed for both fans — you no longer need both sensors to be hot simultaneously. The software daemon and the hardware EC curve write both enforce this.
 - **Hardware Thermal Failsafe**: Even though the daemon overrides the EC dynamically, it explicitly reserves the 10th hardware curve point to force 100% fan speed at 95°C. This ensures that if the daemon ever crashes while fans are off, the hardware will safely take over to prevent overheating.
-- **8-point interactive Cairo graph** with drag points and hover tooltips showing CPU/GPU temp triggers + exact RPM.
-- **8 Y-axis snap values** with measured PWM→RPM mapping:
-  - PWM 0 → 0 RPM, 43 → 1700, 57 → 2300, 71 → 2800, 85 → 3400, 100 → 4000, 114 → 4500, 128 → 5000.
+- **10-point interactive Cairo graph** with drag points and hover tooltips showing CPU/GPU temp triggers + exact RPM.
+- **9 Y-axis snap values** with measured PWM→RPM mapping:
+  - PWM 0 → 0 RPM, **36 → 1400**, 43 → 1700, 57 → 2300, 71 → 2800, 85 → 3400, 100 → 4000, 114 → 4500, 128 → 5000.
 - Monotonically enforced (points can't drop below previous).
-- First point at PWM 40 (EC minimum ~1700 RPM when active).
+- First point at PWM 36 (~1400 RPM) — fans are **completely silent (0 RPM)** below this threshold, then jump to 1400 RPM the moment either the CPU or GPU crosses its trigger temperature.
 - Saved/restored with presets.
 
 ### ✅ Maximum Fan Speed Toggle
@@ -112,6 +113,7 @@ This will automatically:
 - Build and install the `legion-laptop` kernel module **permanently via DKMS** — it will survive reboots and kernel updates. No other drivers are affected.
 - Install and enable the `legiond.service` background daemon that auto-applies your Custom profile on mode switches.
 - Install the GUI into `/opt/LenovoLOQLinux` and register a **"Lenovo LOQ Control"** shortcut in your application menu.
+- **Migrate existing fan profiles** — any saved preset whose first fan point was PWM 0 (silent below threshold) is automatically updated to PWM 36 (~1400 RPM) to match the new minimum-speed behaviour.
 
 > **Password prompt:** When you apply settings from the GUI, your system will ask for your **sudo password** via a standard `pkexec` dialog. This is intentional — hardware writes require elevated privileges.
 
@@ -147,9 +149,9 @@ Settings are saved to `~/.config/legion_linux/profiles.json` and restored via "R
 |---|---|
 | `kernel_module/legion-laptop.c` | Linux kernel module — EC memory-mapped IO, WMI methods, sysfs/hwmon interface |
 | `kernel_module/Makefile` | Kernel module build |
+| `kernel_module/legion_daemon.py` | Background daemon — 1 s polling loop, OR-logic fan curve lookup, hardware PWM flattener |
 | `python/legion_linux/legion_linux/legion.py` | Python backend — `LegionModelFacade` wrapping every sysfs node |
-| `GTK4 UI/legion_gtk.py` | GTK4/Adwaita GUI application |
-
+| `GTK4 UI/legion_gtk.py` | GTK4/Adwaita GUI — fan curve widget, preset manager, hardware apply |
 | `requirements.txt` | Python dependencies |
 | `deploy/` | Build/packaging scripts (DKMS, PKGBUILD, .spec) |
 | `tests/` | Shell-based test scripts |

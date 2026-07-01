@@ -73,12 +73,13 @@ def hw_write(cmd_str):
 # ===================================================================
 
 class FanCurveWidget(Gtk.DrawingArea):
-    SNAP = [0, 43, 57, 71, 85, 100, 114, 128]
+    SNAP = [0, 36, 43, 57, 71, 85, 100, 114, 128]
     MAX_PWM = 128
-    _RPM_MAP = {0: 0, 43: 1700, 57: 2300, 71: 2800, 85: 3400, 100: 4000, 114: 4500, 128: 5000}
+    # PWM 36 ≈ 1400 RPM (1400/5000 * 128 = 35.84 → 36)
+    _RPM_MAP = {0: 0, 36: 1400, 43: 1700, 57: 2300, 71: 2800, 85: 3400, 100: 4000, 114: 4500, 128: 5000}
     # [cpu_temp, gpu_temp, pwm_speed] — temps are static, pwm is drag-modifiable
     DEFAULTS = [
-        [62, 54,   0], [64, 56,  43], [68, 58,  57],
+        [62, 54,  36], [64, 56,  43], [68, 58,  57],
         [72, 60,  71], [76, 66,  85], [80, 72,  85],
         [84, 80, 100], [88, 88, 114], [93, 94, 114],
         [98, 99, 128]
@@ -624,10 +625,15 @@ class CustomSettingsWindow(Adw.Window):
         if hwmon and hasattr(self, 'graph'):
             for i, p in enumerate(self.graph.points):
                 pt = i + 1
+                # ponytail: use min(cpu,gpu) threshold so either hot sensor triggers
+                # the fan step — OR logic instead of the old AND-per-channel behaviour.
+                trigger_temp = min(p[0], p[1])
                 cmds.append(f"echo {p[2]} > {hwmon}/pwm1_auto_point{pt}_pwm")
                 cmds.append(f"echo {p[2]} > {hwmon}/pwm2_auto_point{pt}_pwm")
-                cmds.append(f"echo {p[0]} > {hwmon}/pwm1_auto_point{pt}_temp")
-                cmds.append(f"echo {p[1]} > {hwmon}/pwm3_auto_point{pt}_temp")
+                cmds.append(f"echo {p[2]} > {hwmon}/pwm3_auto_point{pt}_pwm")
+                cmds.append(f"echo {trigger_temp} > {hwmon}/pwm1_auto_point{pt}_temp")
+                cmds.append(f"echo {trigger_temp} > {hwmon}/pwm2_auto_point{pt}_temp")
+                cmds.append(f"echo {trigger_temp} > {hwmon}/pwm3_auto_point{pt}_temp")
 
         if cmds:
             hw_write(" ; ".join(cmds))

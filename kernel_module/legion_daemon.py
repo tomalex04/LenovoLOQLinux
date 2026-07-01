@@ -120,23 +120,24 @@ def fan_curve_pwm(fan_points, cpu_temp, gpu_temp):
     """
     Given the fan curve points [cpu_temp, gpu_temp, pwm] and current temps,
     return the correct PWM value.
-    Fan curve points are sorted ascending by cpu_temp.
-    The controlling sensor is whichever (CPU or GPU) maps to the HIGHEST pwm.
+    OR logic: whichever sensor (CPU or GPU) demands the highest PWM wins.
     """
     if not fan_points or len(fan_points) < 2:
         return None
 
     def lookup(temp_idx, temp_val):
-        """Interpolate/step PWM from curve using one sensor's temp column."""
-        # Step function: find the last point where trigger <= current temp
-        pwm = fan_points[0][2]
+        """Step-function PWM lookup for one sensor column.
+        Scans all points so the result is correct regardless of column ordering.
+        ponytail: no break — GPU temps may not be ordered the same as CPU temps.
+        Starts at 0 so temps below the first threshold always yield 0 RPM.
+        """
+        pwm = 0  # fans off until the first threshold is crossed
         for pt in fan_points:
             if temp_val >= pt[temp_idx]:
                 pwm = pt[2]
-            else:
-                break
         return pwm
 
+    # OR logic: either hot sensor alone is sufficient to demand higher fan speed
     pwm_cpu = lookup(0, cpu_temp) if cpu_temp is not None else 0
     pwm_gpu = lookup(1, gpu_temp) if gpu_temp is not None else 0
     return max(pwm_cpu, pwm_gpu)
