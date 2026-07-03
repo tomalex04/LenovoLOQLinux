@@ -32,10 +32,6 @@ install: all
 	@mkdir --parent --verbose $(MODDESTDIR)
 	@install --preserve-timestamps -D --mode=644 *.ko $(INSTALLDIR)
 	@depmod --all $(KVER)
-	@install -D --mode=755 legion_daemon.py /usr/local/bin/legion_daemon.py
-	@install -D --mode=644 legiond.service /etc/systemd/system/legiond.service
-	@systemctl daemon-reload
-	@systemctl enable --now legiond.service || true
 	@printf "%s\n" "Installion finished."
 
 uninstall:
@@ -93,10 +89,6 @@ dkms: all
 	fi
 	dkms build LenovoLegionLinux --force -v 1.0.0
 	dkms install LenovoLegionLinux --force -v 1.0.0
-	@install -D --mode=755 legion_daemon.py /usr/local/bin/legion_daemon.py
-	@install -D --mode=644 legiond.service /etc/systemd/system/legiond.service
-	@systemctl daemon-reload
-	@systemctl enable --now legiond.service || true
 	printf "%s\n" "Loading module"
 	modprobe legion_laptop
 	dmesg --ctime | grep legion_laptop

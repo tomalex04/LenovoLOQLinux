@@ -1,11 +1,11 @@
 /*
  * Intel ACPI Component Architecture
- * AML/ASL+ Disassembler version 20230628 (64-bit version)
- * Copyright (c) 2000 - 2023 Intel Corporation
+ * AML/ASL+ Disassembler version 20251212 (64-bit version)
+ * Copyright (c) 2000 - 2025 Intel Corporation
  * 
  * Disassembling to symbolic ASL+ operators
  *
- * Disassembly of /media/tom/Shared/work/LenovoLegionLinux/dsdt.dat, Mon Apr 20 23:25:26 2026
+ * Disassembly of /mnt/workspace/work/LenovoLOQLinux/dsdt.dat
  *
  * Original Table Header:
  *     Signature        "DSDT"

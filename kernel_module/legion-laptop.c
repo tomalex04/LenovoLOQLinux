@@ -211,6 +211,7 @@ enum access_method {
 	ACCESS_METHOD_WMI3 = 5,
 	ACCESS_METHOD_EC2 = 10, // ideapad fancurve method
 	ACCESS_METHOD_EC3 = 11, // loq
+	ACCESS_METHOD_EC4 = 12, // loq 15iax9 natively
 };
 
 // acpi paths used by this driver
@@ -1077,7 +1078,7 @@ static const struct model_config model_necn = {
 	.access_method_keyboard = ACCESS_METHOD_WMI2,
 	.access_method_fanspeed = ACCESS_METHOD_WMI3,
 	.access_method_temperature = ACCESS_METHOD_WMI3,
-	.access_method_fancurve = ACCESS_METHOD_EC3,
+	.access_method_fancurve = ACCESS_METHOD_EC4,
 	.access_method_fanfullspeed = ACCESS_METHOD_WMI3,
 	.acpi_check_dev = false,
 	.ramio_physical_start = 0xFE0B0F00,
@@ -2467,7 +2468,7 @@ static bool fancurve_set_speed_pwm(struct fancurve *fancurve, int point_id,
 		*speed = clamp_t(u8, value, 0, 255);
 		return true;
 	case FAN_SPEED_UNIT_RPM_HUNDRED:
-		*speed = clamp_t(u8, (value * MAX_RPM + (100 * 255) - 1) / (100 * 255), 0, 255);
+		*speed = clamp_t(u8, (value * MAX_RPM + (100 * 255) - 1) / (100 * 255), 0, 50);
 		return true;
 	default:
 		pr_info("No method to set for fan_speed_unit %d.",
@@ -3614,6 +3615,75 @@ static int ec_write_fancurve_loq(struct ecram *ecram,
 	return 0;
 }
 
+static int ec_read_fancurve_15iax9(struct legion_private *priv,
+				struct fancurve *fancurve)
+{
+	size_t i;
+	size_t struct_offset = 6;
+	u16 fan1_base = 0xC400; // mapped to MMIO 0xFE0B0F00
+	u16 fan2_base = 0xC43C; // mapped to MMIO 0xFE0B0F3C
+
+	fancurve->fan_speed_unit = FAN_SPEED_UNIT_RPM_HUNDRED;
+	for (i = 0; i < FANCURVESIZE_LOQ; ++i) {
+		struct fancurve_point *point = &fancurve->points[i];
+		u8 val = 0;
+
+		ecram_memoryio_read(&priv->ec_memoryio, fan1_base + (i * struct_offset) + 0, &val);
+		point->cpu_min_temp_celsius = val;
+		ecram_memoryio_read(&priv->ec_memoryio, fan1_base + (i * struct_offset) + 1, &val);
+		point->cpu_max_temp_celsius = val;
+		ecram_memoryio_read(&priv->ec_memoryio, fan1_base + (i * struct_offset) + 2, &val);
+		point->speed1 = val;
+
+		ecram_memoryio_read(&priv->ec_memoryio, fan2_base + (i * struct_offset) + 0, &val);
+		point->gpu_min_temp_celsius = val;
+		ecram_memoryio_read(&priv->ec_memoryio, fan2_base + (i * struct_offset) + 1, &val);
+		point->gpu_max_temp_celsius = val;
+		ecram_memoryio_read(&priv->ec_memoryio, fan2_base + (i * struct_offset) + 2, &val);
+		point->speed2 = val;
+
+		point->ic_max_temp_celsius = 0;
+		point->ic_min_temp_celsius = 0;
+		point->accel = 0;
+		point->decel = 0;
+	}
+
+	fancurve->size = FANCURVESIZE_LOQ;
+	fancurve->current_point_i = ecram_read(&priv->ecram, priv->conf->registers->EXT_FAN_CUR_POINT);
+	fancurve->current_point_i = min(fancurve->current_point_i, fancurve->size);
+	return 0;
+}
+
+static int ec_write_fancurve_15iax9(struct legion_private *priv,
+				 const struct fancurve *fancurve)
+{
+	size_t i;
+	size_t struct_offset = 6;
+	u16 fan1_base = 0xC400; // mapped to MMIO 0xFE0B0F00
+	u16 fan2_base = 0xC43C; // mapped to MMIO 0xFE0B0F3C
+	u8 cmrd;
+
+	for (i = 0; i < FANCURVESIZE_LOQ; ++i) {
+		const struct fancurve_point *point = &fancurve->points[i];
+		// Write Fan 1
+		ecram_memoryio_write(&priv->ec_memoryio, fan1_base + (i * struct_offset) + 0, point->cpu_max_temp_celsius);
+		ecram_memoryio_write(&priv->ec_memoryio, fan1_base + (i * struct_offset) + 1, point->cpu_max_temp_celsius);
+		ecram_memoryio_write(&priv->ec_memoryio, fan1_base + (i * struct_offset) + 2, point->speed1);
+
+		// Write Fan 2 (GUI synchronizes curves, but just in case)
+		ecram_memoryio_write(&priv->ec_memoryio, fan2_base + (i * struct_offset) + 0, point->gpu_max_temp_celsius);
+		ecram_memoryio_write(&priv->ec_memoryio, fan2_base + (i * struct_offset) + 1, point->gpu_max_temp_celsius);
+		ecram_memoryio_write(&priv->ec_memoryio, fan2_base + (i * struct_offset) + 2, point->speed2);
+	}
+
+	// Trigger handshake to reload from MMIO
+	cmrd = ecram_read(&priv->ecram, LOQ_CMDR_ADDR);
+	cmrd |= (1 << 4);
+	ecram_write(&priv->ecram, LOQ_CMDR_ADDR, cmrd);
+
+	return 0;
+}
+
 static int read_fancurve(struct legion_private *priv, struct fancurve *fancurve)
 {
 	// TODO: use enums or function pointers?
@@ -3627,6 +3697,8 @@ static int read_fancurve(struct legion_private *priv, struct fancurve *fancurve)
 						fancurve);
 	case ACCESS_METHOD_EC3:
 		return ec_read_fancurve_loq(&priv->ecram, priv->conf, fancurve);
+	case ACCESS_METHOD_EC4:
+		return ec_read_fancurve_15iax9(priv, fancurve);
 	case ACCESS_METHOD_WMI3:
 		return wmi_read_fancurve_custom(priv->conf, fancurve);
 	default:
@@ -3650,6 +3722,8 @@ static int write_fancurve(struct legion_private *priv,
 	case ACCESS_METHOD_EC3:
 		return ec_write_fancurve_loq(&priv->ecram, priv->conf,
 					     fancurve);
+	case ACCESS_METHOD_EC4:
+		return ec_write_fancurve_15iax9(priv, fancurve);
 	case ACCESS_METHOD_WMI3:
 		return wmi_write_fancurve_custom(priv->conf, fancurve);
 	default:

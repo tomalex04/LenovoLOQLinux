@@ -75,8 +75,8 @@ def hw_write(cmd_str):
 class FanCurveWidget(Gtk.DrawingArea):
     SNAP = [0, 36, 43, 57, 71, 85, 100, 114, 128]
     MAX_PWM = 128
-    # PWM 36 ≈ 1400 RPM (1400/5000 * 128 = 35.84 → 36)
-    _RPM_MAP = {0: 0, 36: 1400, 43: 1700, 57: 2300, 71: 2800, 85: 3400, 100: 4000, 114: 4500, 128: 5000}
+    # PWM 36 ≈ 1500 RPM (1500/5000 * 128 = 38.4 -> 38, but using 36 for consistency with default profile mapping)
+    _RPM_MAP = {0: 0, 36: 1500, 43: 1700, 57: 2300, 71: 2800, 85: 3400, 100: 4000, 114: 4500, 128: 5000}
     # [cpu_temp, gpu_temp, pwm_speed] — temps are static, pwm is drag-modifiable
     DEFAULTS = [
         [62, 54,  36], [64, 56,  43], [68, 58,  57],
@@ -280,7 +280,7 @@ class CustomSettingsWindow(Adw.Window):
         self.pl2_duration = self.add_combo(cpu_group, "Short Term Power Limit Duration",
             ["20 s", "24 s", "28 s", "32 s", "40 s", "48 s", "56 s", "64 s", "80 s", "96 s", "112 s", "128 s", "160 s"],
             "The amount of time the CPU is allowed to boost and use Short Term Power Limit for. When Tau expires, Long Term Power Limit is used.")
-        self.cpu_temp = self.add_slider(cpu_group, "CPU Temperature Limit", 85, 100, " °C",
+        self.cpu_temp = self.add_slider(cpu_group, "CPU Temperature Limit", 80, 100, " °C",
             "The maximum temperature that can be reached by the CPU before frequency and power is reduced.")
 
         # === GPU Section === (exact names & descriptions from Lenovo Vantage)
@@ -625,15 +625,12 @@ class CustomSettingsWindow(Adw.Window):
         if hwmon and hasattr(self, 'graph'):
             for i, p in enumerate(self.graph.points):
                 pt = i + 1
-                # ponytail: use min(cpu,gpu) threshold so either hot sensor triggers
-                # the fan step — OR logic instead of the old AND-per-channel behaviour.
-                trigger_temp = min(p[0], p[1])
                 cmds.append(f"echo {p[2]} > {hwmon}/pwm1_auto_point{pt}_pwm")
                 cmds.append(f"echo {p[2]} > {hwmon}/pwm2_auto_point{pt}_pwm")
                 cmds.append(f"echo {p[2]} > {hwmon}/pwm3_auto_point{pt}_pwm")
-                cmds.append(f"echo {trigger_temp} > {hwmon}/pwm1_auto_point{pt}_temp")
-                cmds.append(f"echo {trigger_temp} > {hwmon}/pwm2_auto_point{pt}_temp")
-                cmds.append(f"echo {trigger_temp} > {hwmon}/pwm3_auto_point{pt}_temp")
+                cmds.append(f"echo {p[0]} > {hwmon}/pwm1_auto_point{pt}_temp")
+                cmds.append(f"echo {p[1]} > {hwmon}/pwm2_auto_point{pt}_temp")
+                cmds.append(f"echo {p[1]} > {hwmon}/pwm3_auto_point{pt}_temp")
 
         if cmds:
             hw_write(" ; ".join(cmds))
@@ -766,6 +763,7 @@ class LegionApp(Adw.Application):
                     cmds.append(f"echo {pt_data[2]} > {hwmon}/pwm1_auto_point{pt}_pwm")
                     cmds.append(f"echo {pt_data[2]} > {hwmon}/pwm2_auto_point{pt}_pwm")
                     cmds.append(f"echo {pt_data[0]} > {hwmon}/pwm1_auto_point{pt}_temp")
+                    cmds.append(f"echo {pt_data[1]} > {hwmon}/pwm2_auto_point{pt}_temp")
                     cmds.append(f"echo {pt_data[1]} > {hwmon}/pwm3_auto_point{pt}_temp")
 
         if cmds: hw_write(" ; ".join(cmds))

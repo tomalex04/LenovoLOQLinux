@@ -9,7 +9,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 echo "============================================="
-echo " Uninstalling Kernel Driver (DKMS & Daemon)  "
+echo " Uninstalling Kernel Driver (DKMS)           "
 echo "============================================="
 # Disable and remove the legiond daemon
 systemctl disable --now legiond.service 2>/dev/null || true
@@ -32,8 +32,7 @@ depmod -a 2>/dev/null || true
 # Unload our module from the running kernel (ignore error if not loaded)
 rmmod legion_laptop 2>/dev/null || true
 
-# Remove the daemon helper script
-rm -f /usr/local/bin/legion_daemon.py
+
 
 echo ""
 echo "============================================="
@@ -50,6 +49,6 @@ echo "============================================="
 echo " Uninstallation Complete!                    "
 echo "============================================="
 echo ""
-echo " -> Only the Lenovo LOQ driver, daemon, and GUI were removed."
+echo " -> Only the Lenovo LOQ driver and GUI were removed."
 echo "    No other drivers or system components were affected."
 echo ""

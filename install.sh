@@ -26,6 +26,8 @@ rm -rf /usr/src/LenovoLegionLinux-1.0.0
 make dkms
 cd "$REPO_DIR"
 
+
+
 echo ""
 echo "============================================="
 echo " Installing Desktop App GUI...               "
@@ -55,7 +57,7 @@ cat << EOF > /usr/share/applications/lenovoloq.desktop
 [Desktop Entry]
 Name=Lenovo LOQ Control
 Comment=Power and Thermal Management for Lenovo LOQ 15IAX9
-Exec=python3 "/opt/LenovoLOQLinux/GTK4 UI/legion_gtk.py"
+Exec=bash -c 'source ~/miniconda3/etc/profile.d/conda.sh 2>/dev/null || source ~/anaconda3/etc/profile.d/conda.sh 2>/dev/null || true; conda run -n LLL python3 "/opt/LenovoLOQLinux/GTK4 UI/legion_gtk.py"'
 Icon=/usr/share/pixmaps/legion_logo.jpeg
 Terminal=false
 Type=Application
@@ -70,41 +72,9 @@ update-desktop-database /usr/share/applications 2>/dev/null || true
 
 echo ""
 echo "============================================="
-echo " Installing Background Daemon...             "
-echo "============================================="
-cp "$REPO_DIR/kernel_module/legion_daemon.py" /usr/local/bin/
-chmod +x /usr/local/bin/legion_daemon.py
-cp "$REPO_DIR/kernel_module/legiond.service" /etc/systemd/system/
-systemctl daemon-reload
-systemctl enable --now legiond.service
-
-echo ""
-echo "============================================="
 echo " Migrating Fan Curve Profiles...             "
 echo "============================================="
-# Update any existing profiles whose first fan-curve point still has PWM=0 (silent)
-# to PWM=36 (~1400 RPM) so the new minimum-speed OR-trigger behaviour applies.
-python3 - << 'PYEOF'
-import json, os, glob
-
-for profiles_file in glob.glob("/home/*/.config/legion_linux/profiles.json"):
-    try:
-        with open(profiles_file) as f:
-            profiles = json.load(f)
-        changed = False
-        for name, p in profiles.items():
-            fan = p.get("fan", [])
-            if fan and fan[0][2] == 0:
-                fan[0][2] = 36  # 0 RPM → ~1400 RPM at first threshold
-                changed = True
-                print(f"  Patched first fan point in '{name}' ({profiles_file})")
-        if changed:
-            with open(profiles_file, "w") as f:
-                json.dump(profiles, f)
-    except Exception as e:
-        print(f"  Warning: could not migrate {profiles_file}: {e}")
-PYEOF
-
+echo " No migration needed."
 echo ""
 echo "============================================="
 echo " Installation Complete!                      "

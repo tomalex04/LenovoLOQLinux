@@ -290,6 +290,10 @@ class FileFeature(Feature):
         try:
             with open(file_path, "w", encoding=DEFAULT_ENCODING) as filepointer:
                 filepointer.write(str(value))
+        except PermissionError:
+            import subprocess
+            log.info('Feature %s escalating to sudo hw_write.sh', self.name())
+            subprocess.run(["sudo", "-n", "/opt/LenovoLOQLinux/hw_write.sh", f"echo '{value}' > '{file_path}'"], check=True)
         except IOError as err:
             log.error('Feature %s writing error %s', self.name(), str(err))
             log.error(get_dmesg(only_tail=True, filter_log=False))
@@ -810,8 +814,12 @@ class FanCurveIO(Feature):
 
     @staticmethod
     def _write_file(file_path, value):
-        with open(file_path, "w", encoding=DEFAULT_ENCODING) as filepointer:
-            filepointer.write(str(value))
+        try:
+            with open(file_path, "w", encoding=DEFAULT_ENCODING) as filepointer:
+                filepointer.write(str(value))
+        except PermissionError:
+            import subprocess
+            subprocess.run(["sudo", "-n", "/opt/LenovoLOQLinux/hw_write.sh", f"echo '{value}' > '{file_path}'"], check=True)
 
     @staticmethod
     def _write_file_or(file_path, value):
