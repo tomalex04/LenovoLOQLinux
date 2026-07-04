@@ -1440,7 +1440,7 @@ class CPUTemperatureLimit(IntFileFeature):
     """CPU Temperature Limit - EC register at 0xC4FF"""
     def __init__(self):
         super().__init__(os.path.join(LEGION_SYS_BASEPATH,
-                                      "cpu_temperature_limit"), 50, 110, 1)
+                                      "cpu_temperature_limit"), 85, 100, 1)
 
 
 class CPUPL1Tau(IntFileFeature):

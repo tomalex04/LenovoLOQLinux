@@ -280,7 +280,7 @@ class CustomSettingsWindow(Adw.Window):
         self.pl2_duration = self.add_combo(cpu_group, "Short Term Power Limit Duration",
             ["20 s", "24 s", "28 s", "32 s", "40 s", "48 s", "56 s", "64 s", "80 s", "96 s", "112 s", "128 s", "160 s"],
             "The amount of time the CPU is allowed to boost and use Short Term Power Limit for. When Tau expires, Long Term Power Limit is used.")
-        self.cpu_temp = self.add_slider(cpu_group, "CPU Temperature Limit", 80, 100, " °C",
+        self.cpu_temp = self.add_slider(cpu_group, "CPU Temperature Limit", 85, 100, " °C",
             "The maximum temperature that can be reached by the CPU before frequency and power is reduced.")
 
         # === GPU Section === (exact names & descriptions from Lenovo Vantage)
