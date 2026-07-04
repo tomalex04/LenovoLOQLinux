@@ -12,16 +12,16 @@ fi
 echo "============================================="
 echo " Installing Kernel Driver via DKMS...        "
 echo "============================================="
-# DKMS safety: only the 'LenovoLegionLinux' DKMS module is touched.
+# DKMS safety: only the 'LenovoLOQLinux' DKMS module is touched.
 # If the kernel already ships an in-tree legion-laptop driver
 # (Linux >= 5.19), DKMS will back it up before installing ours
 # and will restore it automatically on uninstall — no other drivers
 # are removed or modified at any point.
 cd "$REPO_DIR/kernel_module"
 # Step 1: deregister from DKMS database FIRST (source dir must still exist for this to work)
-dkms remove LenovoLegionLinux/1.0.0 --all 2>/dev/null || true
+dkms remove LenovoLOQLinux/1.0.0 --all 2>/dev/null || true
 # Step 2: NOW clean the source directory — forces Makefile to take the fresh 'dkms add' path
-rm -rf /usr/src/LenovoLegionLinux-1.0.0
+rm -rf /usr/src/LenovoLOQLinux-1.0.0
 # Step 3: build and install fresh
 make dkms
 cd "$REPO_DIR"

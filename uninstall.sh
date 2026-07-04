@@ -16,15 +16,15 @@ systemctl disable --now legiond.service 2>/dev/null || true
 rm -f /etc/systemd/system/legiond.service
 systemctl daemon-reload 2>/dev/null || true
 
-# Remove ONLY the LenovoLegionLinux DKMS module.
+# Remove ONLY the LenovoLOQLinux DKMS module.
 # 'dkms remove' will:
 #   - Uninstall our custom legion-laptop.ko from every kernel version
 #   - Automatically restore the original in-tree legion-laptop module
 #     if one existed before we installed (Linux kernel >= 5.19 ships one).
 # We intentionally do NOT manually rm .ko files so that DKMS can
 # restore any pre-existing driver without us clobbering it.
-dkms remove LenovoLegionLinux/1.0.0 --all 2>/dev/null || true
-rm -rf /usr/src/LenovoLegionLinux-1.0.0
+dkms remove LenovoLOQLinux/1.0.0 --all 2>/dev/null || true
+rm -rf /usr/src/LenovoLOQLinux-1.0.0
 
 # Rebuild module dependency cache after DKMS has cleaned up
 depmod -a 2>/dev/null || true

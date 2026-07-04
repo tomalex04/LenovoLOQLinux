@@ -11,7 +11,7 @@ endif
 #install dir for kernel drivers
 INSTALLDIR := /lib/modules/$(KERNELVERSION)/kernel/drivers/platform/x86
 MODDESTDIR := /lib/modules/$(KERNELVERSION)/kernel/drivers/platform/x86
-DKMSDIR := /usr/src/LenovoLegionLinux-1.0.0
+DKMSDIR := /usr/src/LenovoLOQLinux-1.0.0
 
 obj-m += legion-laptop.o
 
@@ -85,10 +85,10 @@ dkms: all
 	else \
 		mkdir --verbose $(DKMSDIR);\
         cp --recursive * $(DKMSDIR);\
-		dkms add -m LenovoLegionLinux -v 1.0.0;\
+		dkms add -m LenovoLOQLinux -v 1.0.0;\
 	fi
-	dkms build LenovoLegionLinux --force -v 1.0.0
-	dkms install LenovoLegionLinux --force -v 1.0.0
+	dkms build LenovoLOQLinux --force -v 1.0.0
+	dkms install LenovoLOQLinux --force -v 1.0.0
 	printf "%s\n" "Loading module"
 	modprobe legion_laptop
 	dmesg --ctime | grep legion_laptop
