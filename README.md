@@ -47,6 +47,7 @@ This project brings hardware-level tuning, custom power/thermal management, and 
 ### ✅ Working (Non-Custom-Mode)
 - **Power Mode Switching** — Quiet, Balanced, Performance, Custom. WMI-based. Fn+Q hotkeys continue to work independently.
 - **Battery Conservation Mode** — Stops charging at 80% to prolong battery health.
+- **Fn+Q Custom Mode Auto-Apply** — Switching to Custom mode via Fn+Q (or any external tool) automatically re-applies your last saved Custom profile — even when the GUI is closed. Implemented via a udev rule that fires at the kernel level the moment the platform-profile sysfs node is written.
 
 - **Real-time Monitoring** — CPU/GPU temperatures, fan RPM.
 
@@ -114,6 +115,7 @@ This will automatically:
 
 - Install the GUI into `/opt/LenovoLOQLinux` and register a **"Lenovo LOQ Control"** shortcut in your application menu.
 
+- Install a **udev rule** (`/etc/udev/rules.d/99-legion-custom-profile.rules`) and an **apply script** (`/usr/local/bin/legion-apply-custom-profile.sh`) so that pressing Fn+Q to switch to Custom mode automatically re-applies your last saved profile — even when the GUI is not running.
 
 > **Password prompt:** When you apply settings from the GUI, your system will ask for your **sudo password** via a standard `pkexec` dialog. This is intentional — hardware writes require elevated privileges.
 
@@ -152,6 +154,8 @@ Settings are saved to `~/.config/legion_linux/profiles.json` and restored via "R
 | `kernel_module/legion_daemon.py` | Background daemon — 1 s polling loop, OR-logic fan curve lookup, hardware PWM flattener |
 | `python/legion_linux/legion_linux/legion.py` | Python backend — `LegionModelFacade` wrapping every sysfs node |
 | `GTK4 UI/legion_gtk.py` | GTK4/Adwaita GUI — fan curve widget, preset manager, hardware apply |
+| `deploy/99-legion-custom-profile.rules` | udev rule — triggers the apply script when platform-profile changes to custom |
+| `deploy/legion-apply-custom-profile.sh` | Apply script — reads `last_active.txt` + `profiles.json`, writes all profile values to sysfs as root |
 | `requirements.txt` | Python dependencies |
 | `deploy/` | Build/packaging scripts (DKMS, PKGBUILD, .spec) |
 | `tests/` | Shell-based test scripts |
@@ -167,6 +171,12 @@ Settings are saved to `~/.config/legion_linux/profiles.json` and restored via "R
 **pkexec password prompt dismissed:** Just try again and enter your password. No hardware writes happened.
 
 **Fan curve read-back incorrect:** Known limitation. The GUI uses saved profile values, not hwmon read-back, to avoid corrupted data.
+
+**Fn+Q custom mode does not apply profile (app closed):** Ensure you have run `sudo ./install.sh` at least once after the auto-apply feature was added. Check that `/etc/udev/rules.d/99-legion-custom-profile.rules` and `/usr/local/bin/legion-apply-custom-profile.sh` exist. Verify the rule is active with `udevadm monitor` while pressing Fn+Q.
+
+**Profile was never saved (first run):** The auto-apply script requires that you have opened the Custom Settings window and clicked **Save** or **Save & Close** at least once. Until then, `~/.config/legion_linux/last_active.txt` does not exist and the script will skip silently (logged via `logger -t legion-profile`).
+
+**Check apply script logs:** `journalctl -t legion-profile -n 30`
 
 ## :pray: Thanks
 

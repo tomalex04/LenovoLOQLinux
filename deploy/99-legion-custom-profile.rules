@@ -1,0 +1,13 @@
+# /etc/udev/rules.d/99-legion-custom-profile.rules
+#
+# Fires whenever the platform-profile sysfs node changes (e.g. via Fn+Q).
+# Runs legion-apply-custom-profile.sh as root; the script checks the current
+# profile value itself and is a no-op unless the mode is custom/balanced-performance.
+#
+# We match the platform-profile subsystem because the kernel's
+# platform_profile_notify() emits a "change" uevent on the class device.
+
+SUBSYSTEM=="platform-profile", ACTION=="change", \
+    RUN+="/usr/local/bin/legion-apply-custom-profile.sh"
+
+

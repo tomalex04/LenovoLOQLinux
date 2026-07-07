@@ -56,6 +56,8 @@ DMI_MATCH(DMI_PRODUCT_NAME, "83GS"),  // LOQ 15IAX9 specific
 | `kernel_module/legion-laptop.c` | **Linux kernel module** — defines EC register offsets, WMI methods, sysfs interface, hwmon interface. This is the hardware-facing layer. |
 | `python/legion_linux/legion_linux/legion.py` | **Python backend facade** — `LegionModelFacade` class wrapping every sysfs node as a Python object with `.get()`, `.set()`, `.exists()`, `.filename` etc. |
 | `GTK4 UI/legion_gtk.py` | **GTK4/Adwaita GUI** — single-file application. Contains the main status page, battery settings, power mode dropdown, custom-mode settings window with fan curve widget. The end-user app. |
+| `deploy/99-legion-custom-profile.rules` | **udev rule** — fires on `ACTION==change` for the `platform-profile` subsystem (triggered by Fn+Q at kernel level). Runs `legion-apply-custom-profile.sh` as root. |
+| `deploy/legion-apply-custom-profile.sh` | **Apply script** — reads the current platform-profile from sysfs; if `custom`/`balanced-performance`, reads `~/.config/legion_linux/last_active.txt` and `profiles.json` for each logged-in user, then writes all power limits + fan curve to sysfs directly. Uses an embedded Python3 heredoc for JSON parsing. |
 
 ---
 
@@ -191,6 +193,8 @@ The GUI in `GTK4 UI/legion_gtk.py` has:
   - "Maximum fan speed" toggle with WARNING subtitle
 - **Bottom bar:** Load dropdown, Save button, "Save & Close" button
 - **All hardware writes executed via passwordless sudo** (configured during `install.sh`) so you are not bombarded with password prompts every time you apply a profile.
+- **`last_active.txt` is written on every Apply** (not just "Save & Close") so the udev auto-apply script always has a valid profile name even if the user closes via the window × button.
+
 
 ### 3.9 Python Backend (`LegionModelFacade`) ✅
 
@@ -391,12 +395,17 @@ for i in range(0, len(data), 16):
 3. Dump EC again: `sudo xxd /sys/kernel/debug/ec/ec0/io > ~/ec_after.txt`
 4. `diff ~/ec_before.txt ~/ec_after.txt` — the changed bytes are your target registers
 
-### 8.2 MEDIUM: Implement Systemd Service for Profile Persistence
+### 8.2 ✅ DONE: Fn+Q Auto-Apply Last Custom Profile
 
-Create a service that applies the last-known custom profile on boot:
-1. Store profile as JSON in `/etc/legion_linux/profiles.json`
-2. Systemd oneshot service runs at boot: reads JSON, writes to sysfs
-3. Use `ConditionPathExists=/sys/bus/platform/devices/PNP0C09:00/powermode` to only run when driver is loaded
+**Status: Implemented.** See §10.6 for the full design rationale and dead-ends.
+
+When the user switches to Custom mode via Fn+Q (or any other means), the last saved Custom profile is now automatically re-applied — regardless of whether the GUI is running.
+
+**Implementation summary:**
+- `deploy/99-legion-custom-profile.rules` — udev rule: `SUBSYSTEM=="platform", DRIVER=="legion", ACTION=="change"` triggers the script
+- `deploy/legion-apply-custom-profile.sh` — bash+embedded Python3 script that reads `last_active.txt` + `profiles.json` and writes to sysfs as root
+- `GTK4 UI/legion_gtk.py` — `_persist_last_active()` called on every Apply (not just "Save & Close")
+- `install.sh` / `uninstall.sh` — deploy and remove the rule + script, reload udev
 
 ### 8.3 MEDIUM: DKMS Packaging
 
@@ -483,3 +492,99 @@ We realized this was due to the `Min Temp` byte (the down-ramp hysteresis thresh
 The old background daemon (`legiond`) used a software loop to poll temperatures and trigger fans. To ensure the fans spun up if *either* the CPU or GPU got hot, the GUI hacked the data by sending `min(cpu_temp, gpu_temp)` as the trigger threshold for both sensors.
 However, writing directly to the EC hardware exposed this hack: the CPU fan started triggering way too early because it was being fed the GPU's lower temperature thresholds. The EC hardware already handles cross-fan OR-logic natively!
 **Fix:** We updated the GUI (`legion_gtk.py`) to pass the exact, independent CPU thresholds to Fan 1 (`pwm1_auto_pointX_temp`) and GPU thresholds to Fan 2 (`pwm2_auto_pointX_temp`), letting the hardware do its job correctly.
+
+---
+
+### 10.6 Fn+Q Custom Mode Auto-Apply — Full Design Rationale & Dead-Ends
+
+This section documents the complete thought process behind implementing "switch to Custom via Fn+Q and have your last profile automatically re-applied", including every approach considered and why most were rejected.
+
+#### The Problem
+
+When the user presses Fn+Q and lands on Custom mode, the hardware enters custom mode but all power limits and fan curves reset to BIOS defaults. The user expects their previously configured profile to be active immediately. This must work in **two scenarios**:
+
+1. **GUI is running** — the app can detect the mode change and re-apply.
+2. **GUI is closed** — there is no running process to react to the Fn+Q event.
+
+The naive fix (scenario 1 only) already existed as a `sync_ui()` 3-second polling loop that detected a mode change and called `_apply_profile_bg()`. But this silently failed if the GUI was not open, which was the primary complaint.
+
+#### Dead-End 1: Systemd oneshot service on boot
+
+The first instinct was to create a systemd oneshot service that runs at boot, reads the saved profile, and writes it to sysfs. This was already noted in §8.2 of this document.
+
+**Why it was rejected:** It only runs on boot, not when the user presses Fn+Q mid-session. If the laptop is already running and the user cycles through modes (Quiet → Balanced → Custom), a boot-time service has no awareness of that event. It also requires a restart to take effect during development. Wrong tool for the job.
+
+#### Dead-End 2: Polling daemon (systemd service running every 1s)
+
+A persistent systemd service that runs a Python or bash loop, reads `platform-profile` every second, and applies the profile when it detects `custom`.
+
+**Why it was rejected:**
+- Wastes CPU with constant polling even though the event happens rarely.
+- Another always-running daemon to maintain, debug, and ensure starts/stops cleanly.
+- Race conditions between the daemon and the GUI (both trying to write sysfs simultaneously).
+- The correct Linux idiom for "react when a sysfs value changes" is not polling — it is `inotify` or udev.
+
+#### Dead-End 3: inotify on the platform-profile sysfs file
+
+Using `inotify` to watch the `platform-profile/.../profile` sysfs file for writes.
+
+**Why it was rejected:** The Linux kernel does not generate `inotify` events for sysfs file writes. `inotify` only works on real filesystem files in tmpfs/ext4/etc. Sysfs is a virtual pseudo-filesystem; writes to it trigger kernel callbacks directly without generating VFS-level notifications. This is a well-known Linux limitation.
+
+#### Dead-End 4: ACPI event listener
+
+Listening for ACPI events via `acpid` or `/proc/acpi/event` when Fn+Q is pressed.
+
+**Why it was rejected:** Fn+Q on this laptop does not generate a standard ACPI event visible to userspace. The Fn key combination is handled entirely inside the EC firmware and the WMI layer. The kernel driver translates the mode change into a sysfs write, but no corresponding ACPI event surfaces. Verified with `acpi_listen` while pressing Fn+Q — no output.
+
+#### The Correct Solution: udev rule
+
+udev watches kernel object events (kobject uevent) — and when a platform driver attribute is written, the kernel emits a `change` uevent on that device. This is exactly what happens when `Fn+Q` writes to `platform-profile/.../profile`.
+
+A udev rule with `SUBSYSTEM=="platform-profile", ACTION=="change"` fires the moment the kernel processes the mode change — event-driven, zero polling, runs as root, independent of whether the GUI is running.
+
+**Why `ACTION=="change"` instead of matching the profile value in the rule:**
+The udev attribute match syntax (`ATTR{...}=="value"`) does not reliably support glob patterns in the attribute *key path* (e.g. `platform-profile/platform-profile-[0-9]/profile`). The nested path with the `[0-9]` glob is expanded by the shell in userspace but udev processes it in the kernel context where the glob is not expanded. Attempting to match on the attribute value was unreliable and produced no trigger. The correct approach is to match broadly on `ACTION=="change"` and let the shell script read and check the value itself — which is a simple `cat` + string comparison.
+
+#### Why Python3 inside the shell script (not jq)
+
+The profile data is stored in `~/.config/legion_linux/profiles.json` (written by the GTK4 GUI). Parsing JSON in pure bash is fragile. Options were:
+- **`jq`** — not installed by default on all distributions (missing on minimal Ubuntu, CachyOS base)
+- **`python3`** — guaranteed to be present (the entire GUI depends on it)
+
+Using an embedded Python3 heredoc inside the bash script gives clean JSON parsing with the exact same field names as `_do_save()` in `legion_gtk.py`, without any external dependency beyond what the app already requires.
+
+#### The `last_active.txt` bug fix
+
+During implementation, we discovered that `last_active.txt` was only written when the user clicked **"Save & Close"** (not plain **"Save"**). This meant:
+- User opens Custom Settings, tweaks values, clicks "Save" (hardware updated, `profiles.json` updated)
+- User closes the window via the × button
+- `last_active.txt` is NOT updated
+- Fn+Q cycles to Custom — udev script reads stale `last_active.txt` pointing to the wrong (or no) profile
+
+**Fix:** Extracted a `_persist_last_active()` helper method and called it from `_do_save()` unconditionally — before the `if close:` branch. Now every Apply (Save or Save & Close) records the active profile name.
+
+#### sysfs attribute names: legion.py vs. the apply script
+
+The Python facade (`legion.py`) names attributes like `cpu_longterm_power_limit` (underscores, human-readable). The actual sysfs file names written by the kernel module are different: `cpu_longterm_powerlimit` (no underscore between `power` and `limit`). The apply script uses the **kernel sysfs names directly** (same as what `_do_save()` builds via `feat.filename`). These were verified against the `legion.py` class definitions:
+
+| Profile JSON key | Sysfs filename |
+|---|---|
+| `pl1` | `cpu_longterm_powerlimit` |
+| `pl2` | `cpu_shortterm_powerlimit` |
+| `cross_load` | `cpu_cross_loading_powerlimit` |
+| `peak` | `cpu_peak_powerlimit` |
+| `tau` | `cpu_pl1_tau` |
+| `cpu_temp` | `cpu_temperature_limit` |
+| `dyn_boost` | `gpu_ppab_powerlimit` |
+| `ctgp` | `gpu_ctgp_powerlimit` |
+| `gpu_to_cpu_boost` | `gpu_to_cpu_dynamic_boost` |
+| `max_fan` | `fan_fullspeed` |
+| `fan` (array) | `legion_hwmon/pwm*_auto_point*_*` |
+
+#### Kernel version path branching
+
+The sysfs base path for the driver changed between kernel versions (mirroring `legion.py` lines 26–30):
+- Kernel `< 7.0`: `/sys/module/legion_laptop/drivers/platform:legion/PNP0C09:00`
+- Kernel `≥ 7.0`: `/sys/module/legion_laptop/drivers/platform:legion/legion`
+
+The apply script replicates this exact logic so it works across all supported kernel versions.

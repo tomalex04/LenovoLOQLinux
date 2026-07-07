@@ -46,9 +46,18 @@ update-desktop-database /usr/share/applications 2>/dev/null || true
 
 echo ""
 echo "============================================="
+echo " Removing Fn+Q Custom Profile Auto-Apply... "
+echo "============================================="
+rm -f /usr/local/bin/legion-apply-custom-profile.sh
+rm -f /etc/udev/rules.d/99-legion-custom-profile.rules
+udevadm control --reload-rules 2>/dev/null || true
+echo " Udev rule and apply script removed."
+
+echo ""
+echo "============================================="
 echo " Uninstallation Complete!                    "
 echo "============================================="
 echo ""
-echo " -> Only the Lenovo LOQ driver and GUI were removed."
+echo " -> Only the Lenovo LOQ driver, GUI, and auto-apply rule were removed."
 echo "    No other drivers or system components were affected."
 echo ""

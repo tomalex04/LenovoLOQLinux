@@ -576,6 +576,15 @@ class CustomSettingsWindow(Adw.Window):
         dialog.connect("response", lambda d, resp: self._do_save(close) if resp == "apply" else None)
         dialog.present()
 
+    def _persist_last_active(self):
+        """Always record which profile was last applied so the udev script can restore it."""
+        try:
+            os.makedirs(CONFIG_DIR, exist_ok=True)
+            with open(os.path.join(CONFIG_DIR, "last_active.txt"), "w") as f:
+                f.write(self.current_profile_name)
+        except Exception:
+            pass
+
     def _do_save(self, close):
         """Actually perform the hardware write after user confirmation."""
         tau_vals = [20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160]
@@ -635,11 +644,9 @@ class CustomSettingsWindow(Adw.Window):
         if cmds:
             hw_write(" ; ".join(cmds))
 
+        # Always persist last_active so Fn+Q udev rule knows which profile to restore.
+        self._persist_last_active()
         if close:
-            try:
-                with open(os.path.join(CONFIG_DIR, "last_active.txt"), "w") as f:
-                    f.write(self.current_profile_name)
-            except Exception: pass
             self.close()
 
 

@@ -72,6 +72,22 @@ update-desktop-database /usr/share/applications 2>/dev/null || true
 
 echo ""
 echo "============================================="
+echo " Installing Fn+Q Custom Profile Auto-Apply..."
+echo "============================================="
+# Copy the apply script and set it executable
+cp "$REPO_DIR/deploy/legion-apply-custom-profile.sh" /usr/local/bin/legion-apply-custom-profile.sh
+chmod +x /usr/local/bin/legion-apply-custom-profile.sh
+
+# Install the udev rule
+cp "$REPO_DIR/deploy/99-legion-custom-profile.rules" /etc/udev/rules.d/99-legion-custom-profile.rules
+
+# Reload rules so they take effect immediately (no reboot needed)
+udevadm control --reload-rules
+udevadm trigger --subsystem-match=platform-profile --action=change 2>/dev/null || true
+echo " Udev rule installed and reloaded."
+
+echo ""
+echo "============================================="
 echo " Migrating Fan Curve Profiles...             "
 echo "============================================="
 echo " No migration needed."
@@ -81,5 +97,6 @@ echo " Installation Complete!                      "
 echo "============================================="
 echo ""
 echo " -> Launch 'Lenovo LOQ Control' from your application menu."
+echo " -> Fn+Q will now auto-apply your last saved Custom profile."
 echo ""
 
